@@ -1,1 +1,18 @@
-
+services:
+  schedule-service:
+    build:
+      context: .
+    image: university-system/schedule-service:dev
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${SCHEDULE_DB_NAME}
+      DATABASE_USER: ${SCHEDULE_DB_USER}
+      DATABASE_PASSWORD: ${SCHEDULE_DB_PASSWORD}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - services-network

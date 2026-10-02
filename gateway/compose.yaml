@@ -1,1 +1,23 @@
-
+services:
+  gateway:
+    build:
+      context: .
+    image: university-system/gateway:dev
+    environment:
+      ACADEMIC_SERVICE_URL: http://academic-service:8000
+      STUDENT_SERVICE_URL: http://student-service:8000
+      SCHEDULE_SERVICE_URL: http://schedule-service:8000
+      ATTENDANCE_SERVICE_URL: http://attendance-service:8000
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      academic-service:
+        condition: service_started
+      student-service:
+        condition: service_started
+      schedule-service:
+        condition: service_started
+      attendance-service:
+        condition: service_started
+    networks:
+      - services-network

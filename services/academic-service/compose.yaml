@@ -1,1 +1,18 @@
-
+services:
+  academic-service:
+    build:
+      context: .
+    image: university-system/academic-service:dev
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${ACADEMIC_DB_NAME}
+      DATABASE_USER: ${ACADEMIC_DB_USER}
+      DATABASE_PASSWORD: ${ACADEMIC_DB_PASSWORD}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - services-network

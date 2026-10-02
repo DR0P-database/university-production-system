@@ -1,1 +1,18 @@
+name: university-system
 
+include:
+  - path: ./gateway/compose.yaml
+  - path: ./services/academic-service/compose.yaml
+  - path: ./services/student-service/compose.yaml
+  - path: ./services/schedule-service/compose.yaml
+  - path: ./services/attendance-service/compose.yaml
+  - path: ./databases/postgresql/compose.yaml
+  - path: ./databases/redis/compose.yaml
+  - path: ./databases/mongodb/compose.yaml
+  - path: ./databases/neo4j/compose.yaml
+  - path: ./databases/elasticsearch/compose.yaml
+  - path: ./messaging/rabbitmq/compose.yaml
+
+networks:
+  services-network:
+    name: ${SERVICES_NETWORK_NAME:-services-network}
