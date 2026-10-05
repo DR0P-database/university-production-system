@@ -11,7 +11,7 @@ include:
   - path: ./databases/mongodb/compose.yaml
   - path: ./databases/neo4j/compose.yaml
   - path: ./databases/elasticsearch/compose.yaml
-  - path: ./messaging/rabbitmq/compose.yaml
+  # - path: ./messaging/rabbitmq/compose.yaml
 
 networks:
   services-network:

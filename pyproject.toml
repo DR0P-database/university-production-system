@@ -1,0 +1,60 @@
+[project]
+name = "university-production-system-dev"
+version = "0.1.0"
+description = "Development tooling for the university production system"
+authors = [{ name = "University System Team" }]
+requires-python = ">=3.12,<4.0"
+dependencies = []
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+ruff = ">=0.9,<1.0"
+pytest = ">=8.3,<9.0"
+pytest-asyncio = ">=0.25,<1.0"
+mypy = ">=1.14,<2.0"
+pre-commit = ">=4.0,<5.0"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = [
+    "gateway/app",
+    "services/academic-service/app",
+    "services/student-service/app",
+    "services/schedule-service/app",
+    "services/attendance-service/app",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "gateway/tests",
+    "services/academic-service/tests",
+    "services/student-service/tests",
+    "services/schedule-service/tests",
+    "services/attendance-service/tests",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+pretty = true
+exclude = [
+    "^gateway/tests/",
+    "^services/.*/tests/",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
