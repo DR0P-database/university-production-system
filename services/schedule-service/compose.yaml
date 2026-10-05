@@ -1,4 +1,22 @@
 services:
+  schedule-migration:
+    build:
+      context: .
+    image: university-system/schedule-service:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${SCHEDULE_DB_NAME}
+      DATABASE_USER: ${SCHEDULE_DB_USER}
+      DATABASE_PASSWORD: ${SCHEDULE_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - services-network
+
   schedule-service:
     build:
       context: .
@@ -12,7 +30,7 @@ services:
     expose:
       - "8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      schedule-migration:
+        condition: service_completed_successfully
     networks:
       - services-network

@@ -1,4 +1,22 @@
 services:
+  attendance-migration:
+    build:
+      context: .
+    image: university-system/attendance-service:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${ATTENDANCE_DB_NAME}
+      DATABASE_USER: ${ATTENDANCE_DB_USER}
+      DATABASE_PASSWORD: ${ATTENDANCE_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - services-network
+
   attendance-service:
     build:
       context: .
@@ -12,7 +30,7 @@ services:
     expose:
       - "8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      attendance-migration:
+        condition: service_completed_successfully
     networks:
       - services-network

@@ -1,4 +1,22 @@
 services:
+  academic-migration:
+    build:
+      context: .
+    image: university-system/academic-service:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${ACADEMIC_DB_NAME}
+      DATABASE_USER: ${ACADEMIC_DB_USER}
+      DATABASE_PASSWORD: ${ACADEMIC_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - services-network
+
   academic-service:
     build:
       context: .
@@ -12,7 +30,7 @@ services:
     expose:
       - "8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      academic-migration:
+        condition: service_completed_successfully
     networks:
       - services-network
