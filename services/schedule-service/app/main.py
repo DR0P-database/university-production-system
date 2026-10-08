@@ -5,16 +5,60 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from sqlalchemy import select
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
+from app.clients import fetch_json
 from app.db import get_session
+from app.errors import api_error
 from app.models import Schedule
+from app.schemas import ScheduleCreate
 
 app = FastAPI(
     title="Schedule Service", version="1.0.0", description="University schedule API"
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, dict)
+        else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
+    )
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "DATA_CONFLICT",
+                "message": "Resource conflicts with existing data",
+                "details": {},
+            }
+        },
+    )
 
 
 def dump(row: Any) -> dict[str, Any]:
@@ -25,32 +69,69 @@ def dump(row: Any) -> dict[str, Any]:
 async def list_schedule(
     request: Request,
     offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=100),
+    group_id: UUID | None = Query(None),
+    lecture_id: UUID | None = Query(None),
+    status: str | None = Query(None),
+    scheduled_date: date | None = Query(None),
+    week_start_date: date | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise api_error(
+            400, "INVALID_DATE_RANGE", "date_from must not be after date_to"
+        )
     query = select(Schedule)
+    explicit = {
+        "group_id": group_id,
+        "lecture_id": lecture_id,
+        "status": status,
+        "scheduled_date": scheduled_date,
+        "week_start_date": week_start_date,
+    }
     for key in ("group_id", "lecture_id", "status"):
-        value = request.query_params.get(key)
+        value = explicit[key]
         if value is not None:
-            query = query.where(
-                getattr(Schedule, key)
-                == (UUID(value) if key.endswith("_id") else value)
-            )
+            query = query.where(getattr(Schedule, key) == value)
     for key in ("scheduled_date", "week_start_date"):
-        value = request.query_params.get(key)
+        value = explicit[key]
         if value is not None:
-            query = query.where(getattr(Schedule, key) == date.fromisoformat(value))
-    return [
-        dump(x)
-        for x in (await session.scalars(query.offset(offset).limit(limit))).all()
-    ]
+            query = query.where(getattr(Schedule, key) == value)
+    if date_from is not None:
+        query = query.where(Schedule.scheduled_date >= date_from)
+    if date_to is not None:
+        query = query.where(Schedule.scheduled_date <= date_to)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.post("/api/v1/schedule", status_code=201, tags=["schedule"])
 async def create_schedule(
     payload: dict[str, Any], session: AsyncSession = Depends(get_session)
 ):
-    row = Schedule(**payload)
+    data = ScheduleCreate.model_validate(payload).model_dump()
+    lecture = await fetch_json(
+        "academic", "/api/v1/academic/lectures", data["lecture_id"]
+    )
+    course = await fetch_json(
+        "academic", "/api/v1/academic/courses", lecture["course_id"]
+    )
+    group = await fetch_json("student", "/api/v1/students/groups", data["group_id"])
+    if course["specialty_id"] != group["specialty_id"]:
+        raise api_error(
+            400,
+            "SPECIALTY_MISMATCH",
+            "Lecture and group belong to different specialties",
+        )
+    row = Schedule(**data)
     session.add(row)
     await session.commit()
     await session.refresh(row)
@@ -74,8 +155,24 @@ async def patch_schedule(
     row = await session.get(Schedule, schedule_id)
     if row is None:
         raise HTTPException(404, "Schedule not found")
+    current = {key: getattr(row, key) for key in ScheduleCreate.model_fields}
+    data = ScheduleCreate.model_validate({**current, **payload}).model_dump()
+    if "lecture_id" in payload or "group_id" in payload:
+        lecture = await fetch_json(
+            "academic", "/api/v1/academic/lectures", data["lecture_id"]
+        )
+        course = await fetch_json(
+            "academic", "/api/v1/academic/courses", lecture["course_id"]
+        )
+        group = await fetch_json("student", "/api/v1/students/groups", data["group_id"])
+        if course["specialty_id"] != group["specialty_id"]:
+            raise api_error(
+                400,
+                "SPECIALTY_MISMATCH",
+                "Lecture and group belong to different specialties",
+            )
     allowed = {c.key for c in inspect(Schedule).mapper.column_attrs}
-    for key, value in payload.items():
+    for key, value in data.items():
         if key in allowed and key != "id":
             setattr(row, key, value)
     await session.commit()
@@ -95,13 +192,21 @@ async def delete_schedule(
 
 
 @app.get("/api/v1/schedule/groups/{group_id}", tags=["schedule"])
-async def group_schedule(group_id: UUID, session: AsyncSession = Depends(get_session)):
-    return [
-        dump(x)
-        for x in (
-            await session.scalars(select(Schedule).where(Schedule.group_id == group_id))
-        ).all()
-    ]
+async def group_schedule(
+    group_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    query = select(Schedule).where(Schedule.group_id == group_id)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.get("/health", tags=["system"])

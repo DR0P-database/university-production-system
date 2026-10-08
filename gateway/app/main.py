@@ -4,7 +4,9 @@ import os
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from app.auth import authenticate, authorize
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 
 SERVICE_PREFIXES = {
     "academic": os.getenv("ACADEMIC_SERVICE_URL", "http://academic-service:8000"),
@@ -24,6 +26,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="University API Gateway", version="1.0.0", lifespan=lifespan)
 
 
+@app.exception_handler(HTTPException)
+async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, dict)
+        else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
+    )
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
 @app.get("/health", tags=["system"], summary="Gateway health check")
 async def health() -> dict[str, str]:
     """Return the health status of the gateway."""
@@ -37,6 +49,8 @@ async def health() -> dict[str, str]:
 )
 async def proxy(service: str, path: str, request: Request) -> Response:
     """Forward an API request to the selected internal service."""
+    claims = authenticate(request)
+    authorize(request, claims)
     base_url = SERVICE_PREFIXES.get(service)
     if base_url is None:
         return Response(status_code=404, content="Unknown service")
@@ -47,7 +61,8 @@ async def proxy(service: str, path: str, request: Request) -> Response:
         params=request.query_params,
         content=await request.body(),
         headers={
-            "content-type": request.headers.get("content-type", "application/json")
+            "content-type": request.headers.get("content-type", "application/json"),
+            "authorization": request.headers.get("authorization", ""),
         },
     )
     return Response(

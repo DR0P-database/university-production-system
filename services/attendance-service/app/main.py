@@ -5,16 +5,60 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from sqlalchemy import select
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
+from app.clients import fetch_json
 from app.db import get_session
+from app.errors import api_error
 from app.models import Attendance
+from app.schemas import AttendanceBatchMark, AttendanceMark
 
 app = FastAPI(
     title="Attendance Service", version="1.0.0", description="Attendance journal API"
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, dict)
+        else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
+    )
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "DATA_CONFLICT",
+                "message": "Resource conflicts with existing data",
+                "details": {},
+            }
+        },
+    )
 
 
 def dump(row: Any) -> dict[str, Any]:
@@ -25,19 +69,30 @@ def dump(row: Any) -> dict[str, Any]:
 async def list_attendance(
     request: Request,
     offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=100),
+    schedule_id: UUID | None = Query(None),
+    student_id: UUID | None = Query(None),
+    week_start_date: date | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     query = select(Attendance)
+    explicit = {
+        "schedule_id": schedule_id,
+        "student_id": student_id,
+        "week_start_date": week_start_date,
+    }
     for key in ("schedule_id", "student_id", "week_start_date"):
-        value = request.query_params.get(key)
+        value = explicit[key]
         if value is not None:
-            value = UUID(value) if key.endswith("_id") else date.fromisoformat(value)
             query = query.where(getattr(Attendance, key) == value)
-    return [
-        dump(x)
-        for x in (await session.scalars(query.offset(offset).limit(limit))).all()
-    ]
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.get("/api/v1/attendance/{attendance_id}", tags=["attendance"])
@@ -91,7 +146,16 @@ async def mark_attendance(
     session: AsyncSession = Depends(get_session),
 ):
     """Create or update one attendance mark idempotently."""
-    return await upsert(schedule_id, student_id, payload, session)
+    data = AttendanceMark.model_validate(payload).model_dump()
+    schedule = await fetch_json("schedule", "/api/v1/schedule", schedule_id)
+    student = await fetch_json("student", "/api/v1/students/students", student_id)
+    if schedule["group_id"] != student["group_id"]:
+        raise api_error(
+            400,
+            "STUDENT_NOT_IN_SCHEDULE_GROUP",
+            "Student does not belong to the schedule group",
+        )
+    return await upsert(schedule_id, student_id, data, session)
 
 
 @app.put("/api/v1/attendance/schedules/{schedule_id}", tags=["attendance"])
@@ -102,10 +166,18 @@ async def mark_schedule_attendance(
 ):
     """Replace or create attendance marks for a schedule."""
     result = []
+    schedule = await fetch_json("schedule", "/api/v1/schedule", schedule_id)
     for item in payload:
-        result.append(
-            await upsert(schedule_id, UUID(str(item.pop("student_id"))), item, session)
-        )
+        data = AttendanceBatchMark.model_validate(item).model_dump()
+        student_id = data.pop("student_id")
+        student = await fetch_json("student", "/api/v1/students/students", student_id)
+        if schedule["group_id"] != student["group_id"]:
+            raise api_error(
+                400,
+                "STUDENT_NOT_IN_SCHEDULE_GROUP",
+                "Student does not belong to the schedule group",
+            )
+        result.append(await upsert(schedule_id, student_id, data, session))
     return result
 
 
@@ -113,26 +185,49 @@ async def mark_schedule_attendance(
 async def schedule_journal(
     schedule_id: UUID,
     week_start_date: date | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
 ):
     query = select(Attendance).where(Attendance.schedule_id == schedule_id)
     if week_start_date is not None:
         query = query.where(Attendance.week_start_date == week_start_date)
-    return [dump(x) for x in (await session.scalars(query)).all()]
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.get("/api/v1/attendance/students/{student_id}", tags=["attendance"])
 async def student_history(
-    student_id: UUID, session: AsyncSession = Depends(get_session)
+    student_id: UUID,
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
 ):
-    return [
-        dump(x)
-        for x in (
-            await session.scalars(
-                select(Attendance).where(Attendance.student_id == student_id)
-            )
-        ).all()
-    ]
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise api_error(
+            400, "INVALID_DATE_RANGE", "date_from must not be after date_to"
+        )
+    query = select(Attendance).where(Attendance.student_id == student_id)
+    if date_from is not None:
+        query = query.where(Attendance.week_start_date >= date_from)
+    if date_to is not None:
+        query = query.where(Attendance.week_start_date <= date_to)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.get("/health", tags=["system"])

@@ -4,47 +4,127 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from sqlalchemy import select
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
+from app.clients import require_exists
 from app.db import get_session
 from app.models import Student, StudentGroup
+from app.schemas import GroupCreate, StudentCreate
 
 app = FastAPI(
     title="Student Service", version="1.0.0", description="Students and groups API"
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, dict)
+        else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
+    )
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
+    text = str(exc.orig).lower()
+    if "students_email" in text:
+        code = "EMAIL_ALREADY_EXISTS"
+    elif "students_student_card_number" in text:
+        code = "STUDENT_CARD_NUMBER_ALREADY_EXISTS"
+    elif "student_groups_name" in text:
+        code = "GROUP_NAME_ALREADY_EXISTS"
+    else:
+        code = "DATA_CONFLICT"
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": code,
+                "message": "Resource conflicts with existing data",
+                "details": {},
+            }
+        },
+    )
+
+
 def dump(row: Any) -> dict[str, Any]:
     return {c.key: getattr(row, c.key) for c in inspect(row).mapper.column_attrs}
 
 
-def register(path: str, model: Any, filters: tuple[str, ...] = ()):
+def register(path: str, model: Any, schema: Any, filters: tuple[str, ...] = ()):
     @app.get(f"/api/v1/students/{path}", tags=[path])
     async def list_items(
         request: Request,
         offset: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=500),
+        limit: int = Query(50, ge=1, le=100),
+        specialty_id: UUID | None = Query(None),
+        department_id: UUID | None = Query(None),
+        enrollment_year: int | None = Query(None, gt=0),
+        group_id: UUID | None = Query(None),
+        status: str | None = Query(None),
+        email: str | None = Query(None),
+        student_card_number: str | None = Query(None),
         session: AsyncSession = Depends(get_session),
     ):
         query = select(model)
+        explicit = {
+            "specialty_id": specialty_id,
+            "department_id": department_id,
+            "enrollment_year": enrollment_year,
+            "group_id": group_id,
+            "status": status,
+            "email": email,
+            "student_card_number": student_card_number,
+        }
         for key in filters:
-            value = request.query_params.get(key)
+            value = explicit[key]
             if value is not None:
-                typ = getattr(model, key).type.python_type
-                value = UUID(value) if typ is UUID else typ(value)
                 query = query.where(getattr(model, key) == value)
-        return [
-            dump(x)
-            for x in (await session.scalars(query.offset(offset).limit(limit))).all()
-        ]
+        total = await session.scalar(select(func.count()).select_from(query.subquery()))
+        rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+        return {
+            "items": [dump(x) for x in rows],
+            "limit": limit,
+            "offset": offset,
+            "total": total or 0,
+        }
 
     @app.post(f"/api/v1/students/{path}", status_code=201, tags=[path])
     async def create(
         payload: dict[str, Any], session: AsyncSession = Depends(get_session)
     ):
-        row = model(**payload)
+        data = schema.model_validate(payload).model_dump()
+        if model is StudentGroup:
+            await require_exists(
+                "academic", "/api/v1/academic/specialties", data["specialty_id"]
+            )
+            await require_exists(
+                "academic", "/api/v1/academic/departments", data["department_id"]
+            )
+        else:
+            await require_exists("student", "/api/v1/students/groups", data["group_id"])
+        row = model(**data)
         session.add(row)
         await session.commit()
         await session.refresh(row)
@@ -67,7 +147,11 @@ def register(path: str, model: Any, filters: tuple[str, ...] = ()):
         if row is None:
             raise HTTPException(404, "Resource not found")
         allowed = {c.key for c in inspect(model).mapper.column_attrs}
-        for key, value in payload.items():
+        current = {key: getattr(row, key) for key in schema.model_fields}
+        data = schema.model_validate({**current, **payload}).model_dump()
+        if model is Student and "group_id" in payload:
+            await require_exists("student", "/api/v1/students/groups", data["group_id"])
+        for key, value in data.items():
             if key in allowed and key != "id":
                 setattr(row, key, value)
         await session.commit()
@@ -83,18 +167,36 @@ def register(path: str, model: Any, filters: tuple[str, ...] = ()):
         await session.commit()
 
 
-register("groups", StudentGroup, ("specialty_id", "department_id", "enrollment_year"))
-register("students", Student, ("group_id", "status", "email", "student_card_number"))
+register(
+    "groups",
+    StudentGroup,
+    GroupCreate,
+    ("specialty_id", "department_id", "enrollment_year"),
+)
+register(
+    "students",
+    Student,
+    StudentCreate,
+    ("group_id", "status", "email", "student_card_number"),
+)
 
 
 @app.get("/api/v1/students/groups/{group_id}/students", tags=["groups"])
-async def group_students(group_id: UUID, session: AsyncSession = Depends(get_session)):
-    return [
-        dump(x)
-        for x in (
-            await session.scalars(select(Student).where(Student.group_id == group_id))
-        ).all()
-    ]
+async def group_students(
+    group_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    query = select(Student).where(Student.group_id == group_id)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    return {
+        "items": [dump(x) for x in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 @app.get("/health", tags=["system"])

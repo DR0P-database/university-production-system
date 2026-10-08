@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
@@ -19,6 +19,17 @@ from app.models import (
     Specialty,
     University,
 )
+from app.schemas import (
+    CourseCreate,
+    DepartmentCreate,
+    InstituteCreate,
+    LectureCreate,
+    MaterialCreate,
+    RelationCreate,
+    RelationUpdate,
+    SpecialtyCreate,
+    UniversityCreate,
+)
 
 router = APIRouter(prefix="/api/v1/academic")
 
@@ -31,11 +42,23 @@ async def list_rows(
     model: Any, session: AsyncSession, filters: dict[str, Any], offset: int, limit: int
 ):
     query = select(model)
+    department_id = filters.pop("department_id", None)
+    if department_id is not None and model is Specialty:
+        query = query.join(
+            DepartmentSpecialty, DepartmentSpecialty.specialty_id == Specialty.id
+        )
+        query = query.where(DepartmentSpecialty.department_id == department_id)
     for key, value in filters.items():
         if value is not None and hasattr(model, key):
             query = query.where(getattr(model, key) == value)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
     rows = (await session.scalars(query.offset(offset).limit(limit))).all()
-    return [dump(row) for row in rows]
+    return {
+        "items": [dump(row) for row in rows],
+        "limit": limit,
+        "offset": offset,
+        "total": total or 0,
+    }
 
 
 async def get_row(model: Any, item_id: UUID, session: AsyncSession):
@@ -46,16 +69,21 @@ async def get_row(model: Any, item_id: UUID, session: AsyncSession):
 
 
 def register_crud(
-    path: str, model: Any, tag: str, filters: tuple[str, ...] = ()
+    path: str, model: Any, tag: str, schema: Any, filters: tuple[str, ...] = ()
 ) -> None:
     @router.get(f"/{path}", tags=[tag], summary=f"List {path}")
     async def list_items(
         request: Request,
         session: AsyncSession = Depends(get_session),
         offset: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=500),
+        limit: int = Query(50, ge=1, le=100),
+        department_id: UUID | None = Query(
+            None, description="Filter specialties by department UUID"
+        ),
     ):
         values = {key: request.query_params.get(key) for key in filters}
+        if "department_id" in values:
+            values["department_id"] = department_id
         for key, value in values.items():
             if value is not None:
                 try:
@@ -77,7 +105,8 @@ def register_crud(
     async def create_item(
         payload: dict[str, Any], session: AsyncSession = Depends(get_session)
     ):
-        row = model(**payload)
+        data = schema.model_validate(payload).model_dump()
+        row = model(**data)
         session.add(row)
         await session.commit()
         await session.refresh(row)
@@ -95,7 +124,9 @@ def register_crud(
     ):
         row = await get_row(model, item_id, session)
         allowed = {c.key for c in inspect(model).mapper.column_attrs}
-        for key, value in payload.items():
+        current = {key: dump(row).get(key) for key in schema.model_fields}
+        data = schema.model_validate({**current, **payload}).model_dump()
+        for key, value in data.items():
             if key in allowed and key != "id":
                 setattr(row, key, value)
         await session.commit()
@@ -114,27 +145,49 @@ def register_crud(
         await session.commit()
 
 
-register_crud("universities", University, "universities")
-register_crud("institutes", Institute, "institutes", ("university_id",))
-register_crud("departments", Department, "departments", ("institute_id",))
-register_crud("specialties", Specialty, "specialties", ("degree_level", "code"))
-register_crud("courses", LectureCourse, "courses", ("specialty_id", "semester"))
-register_crud("lectures", Lecture, "lectures", ("course_id", "lecture_type"))
-register_crud("materials", LectureMaterial, "materials", ("lecture_id", "content_type"))
+register_crud("universities", University, "universities", UniversityCreate)
+register_crud(
+    "institutes", Institute, "institutes", InstituteCreate, ("university_id",)
+)
+register_crud(
+    "departments", Department, "departments", DepartmentCreate, ("institute_id",)
+)
+register_crud(
+    "specialties",
+    Specialty,
+    "specialties",
+    SpecialtyCreate,
+    ("degree_level", "code", "department_id"),
+)
+register_crud(
+    "courses", LectureCourse, "courses", CourseCreate, ("specialty_id", "semester")
+)
+register_crud(
+    "lectures", Lecture, "lectures", LectureCreate, ("course_id", "lecture_type")
+)
+register_crud(
+    "materials",
+    LectureMaterial,
+    "materials",
+    MaterialCreate,
+    ("lecture_id", "content_type"),
+)
 
 
 @router.get("/departments/{department_id}/specialties", tags=["department-specialties"])
 async def list_department_specialties(
-    department_id: UUID, session: AsyncSession = Depends(get_session)
+    department_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
 ):
-    rows = (
-        await session.scalars(
-            select(DepartmentSpecialty).where(
-                DepartmentSpecialty.department_id == department_id
-            )
-        )
-    ).all()
-    return [dump(row) for row in rows]
+    return await list_rows(
+        DepartmentSpecialty,
+        session,
+        {"department_id": department_id},
+        offset,
+        limit,
+    )
 
 
 @router.post(
@@ -147,7 +200,8 @@ async def assign_department_specialty(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_session),
 ):
-    row = DepartmentSpecialty(department_id=department_id, **payload)
+    data = RelationCreate.model_validate(payload).model_dump()
+    row = DepartmentSpecialty(department_id=department_id, **data)
     session.add(row)
     await session.commit()
     await session.refresh(row)
@@ -170,7 +224,8 @@ async def update_department_specialty(
     )
     if row is None:
         raise HTTPException(404, "Relationship not found")
-    row.is_primary = payload.get("is_primary", row.is_primary)
+    data = RelationUpdate.model_validate(payload).model_dump()
+    row.is_primary = data["is_primary"]
     await session.commit()
     await session.refresh(row)
     return dump(row)
@@ -197,6 +252,11 @@ async def remove_department_specialty(
 
 @router.get("/lectures/{lecture_id}/materials", tags=["materials"])
 async def list_lecture_materials(
-    lecture_id: UUID, session: AsyncSession = Depends(get_session)
+    lecture_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
 ):
-    return await list_rows(LectureMaterial, session, {"lecture_id": lecture_id}, 0, 500)
+    return await list_rows(
+        LectureMaterial, session, {"lecture_id": lecture_id}, offset, limit
+    )
