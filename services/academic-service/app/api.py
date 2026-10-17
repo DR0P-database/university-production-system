@@ -33,6 +33,14 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/v1/academic")
 
+PARENT_REFERENCES = {
+    Institute: (University, "university_id", "UNIVERSITY_NOT_FOUND"),
+    Department: (Institute, "institute_id", "INSTITUTE_NOT_FOUND"),
+    LectureCourse: (Specialty, "specialty_id", "SPECIALTY_NOT_FOUND"),
+    Lecture: (LectureCourse, "course_id", "COURSE_NOT_FOUND"),
+    LectureMaterial: (Lecture, "lecture_id", "LECTURE_NOT_FOUND"),
+}
+
 
 def dump(obj: Any) -> dict[str, Any]:
     return {c.key: getattr(obj, c.key) for c in inspect(obj).mapper.column_attrs}
@@ -66,6 +74,23 @@ async def get_row(model: Any, item_id: UUID, session: AsyncSession):
     if row is None:
         raise HTTPException(status_code=404, detail="Resource not found")
     return row
+
+
+async def validate_parent(model: Any, data: dict[str, Any], session: AsyncSession):
+    reference = PARENT_REFERENCES.get(model)
+    if reference is None:
+        return
+    parent_model, field, code = reference
+    parent_id = data[field]
+    if await session.get(parent_model, parent_id) is None:
+        raise HTTPException(
+            404,
+            {
+                "code": code,
+                "message": "Referenced resource does not exist",
+                "details": {field: str(parent_id)},
+            },
+        )
 
 
 def register_crud(
@@ -106,6 +131,7 @@ def register_crud(
         payload: dict[str, Any], session: AsyncSession = Depends(get_session)
     ):
         data = schema.model_validate(payload).model_dump()
+        await validate_parent(model, data, session)
         row = model(**data)
         session.add(row)
         await session.commit()
@@ -126,6 +152,9 @@ def register_crud(
         allowed = {c.key for c in inspect(model).mapper.column_attrs}
         current = {key: dump(row).get(key) for key in schema.model_fields}
         data = schema.model_validate({**current, **payload}).model_dump()
+        reference = PARENT_REFERENCES.get(model)
+        if reference is not None and reference[1] in payload:
+            await validate_parent(model, data, session)
         for key, value in data.items():
             if key in allowed and key != "id":
                 setattr(row, key, value)
@@ -201,6 +230,8 @@ async def assign_department_specialty(
     session: AsyncSession = Depends(get_session),
 ):
     data = RelationCreate.model_validate(payload).model_dump()
+    await get_row(Department, department_id, session)
+    await get_row(Specialty, data["specialty_id"], session)
     row = DepartmentSpecialty(department_id=department_id, **data)
     session.add(row)
     await session.commit()
@@ -241,6 +272,12 @@ async def remove_department_specialty(
     specialty_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
+    row = await session.get(
+        DepartmentSpecialty,
+        {"department_id": department_id, "specialty_id": specialty_id},
+    )
+    if row is None:
+        raise HTTPException(404, "Relationship not found")
     await session.execute(
         delete(DepartmentSpecialty).where(
             DepartmentSpecialty.department_id == department_id,

@@ -6,7 +6,11 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")
+for parent in Path(__file__).resolve().parents:
+    env_file = parent / ".env"
+    if env_file.is_file():
+        load_dotenv(env_file)
+        break
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",

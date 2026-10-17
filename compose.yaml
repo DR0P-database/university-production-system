@@ -6,6 +6,7 @@ include:
   - path: ./services/student-service/compose.yaml
   - path: ./services/schedule-service/compose.yaml
   - path: ./services/attendance-service/compose.yaml
+  - path: ./tools/data-seeder/compose.yaml
   - path: ./databases/postgresql/compose.yaml
   - path: ./databases/redis/compose.yaml
   - path: ./databases/mongodb/compose.yaml
@@ -16,3 +17,6 @@ include:
 networks:
   services-network:
     name: ${SERVICES_NETWORK_NAME:-services-network}
+  database-network:
+    name: ${DATABASE_NETWORK_NAME:-university-database-network}
+    internal: true

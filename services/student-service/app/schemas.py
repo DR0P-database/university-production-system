@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,4 +26,4 @@ class StudentCreate(StrictModel):
     phone: str | None = Field(default=None, max_length=30)
     student_card_number: str | None = Field(default=None, max_length=50)
     enrollment_date: date
-    status: str = "active"
+    status: Literal["active", "academic_leave", "expelled", "graduated"] = "active"

@@ -1,0 +1,40 @@
+services:
+  seed-data:
+    build:
+      context: .
+    image: university-system/data-seeder:dev
+    profiles: ["tools"]
+    command: ["seed"]
+    environment: &seeder-environment
+      ACADEMIC_SERVICE_URL: http://academic-service:8000
+      STUDENT_SERVICE_URL: http://student-service:8000
+      SCHEDULE_SERVICE_URL: http://schedule-service:8000
+      ATTENDANCE_SERVICE_URL: http://attendance-service:8000
+      SEED_STUDENT_COUNT: ${SEED_STUDENT_COUNT:-1000}
+      SEED_UNIVERSITY_COUNT: ${SEED_UNIVERSITY_COUNT:-2}
+      SEED_GROUP_SIZE: ${SEED_GROUP_SIZE:-30}
+      SEED_WEEK_COUNT: ${SEED_WEEK_COUNT:-4}
+      SEED_START_DATE: ${SEED_START_DATE:-2026-09-07}
+      SEED_CONCURRENCY: ${SEED_CONCURRENCY:-12}
+    depends_on: &seeder-dependencies
+      academic-service:
+        condition: service_healthy
+      student-service:
+        condition: service_healthy
+      schedule-service:
+        condition: service_healthy
+      attendance-service:
+        condition: service_healthy
+    networks:
+      - services-network
+
+  verify-data:
+    build:
+      context: .
+    image: university-system/data-seeder:dev
+    profiles: ["tools"]
+    command: ["verify"]
+    environment: *seeder-environment
+    depends_on: *seeder-dependencies
+    networks:
+      - services-network

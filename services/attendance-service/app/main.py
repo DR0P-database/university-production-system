@@ -5,8 +5,10 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,24 +18,43 @@ from app.clients import fetch_json
 from app.db import get_session
 from app.errors import api_error
 from app.models import Attendance
+from app.request_id import get_request_id, request_id_middleware
 from app.schemas import AttendanceBatchMark, AttendanceMark
 
 app = FastAPI(
     title="Attendance Service", version="1.0.0", description="Attendance journal API"
 )
+app.middleware("http")(request_id_middleware)
+
+
+def error_body(code: str, message: str, details: object = None) -> dict:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": jsonable_encoder(details or {}),
+            "request_id": get_request_id(),
+        }
+    }
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content={
-            "error": {
-                "code": "VALIDATION_ERROR",
-                "message": "Request validation failed",
-                "details": exc.errors(),
-            }
-        },
+        content=error_body(
+            "VALIDATION_ERROR", "Request validation failed", exc.errors()
+        ),
+    )
+
+
+@app.exception_handler(ValidationError)
+async def pydantic_validation_error(_: Request, exc: ValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content=error_body(
+            "VALIDATION_ERROR", "Request validation failed", exc.errors()
+        ),
     )
 
 
@@ -44,6 +65,7 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
         if isinstance(exc.detail, dict)
         else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
     )
+    detail.setdefault("request_id", get_request_id())
     return JSONResponse(status_code=exc.status_code, content={"error": detail})
 
 
@@ -51,13 +73,7 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
 async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
     return JSONResponse(
         status_code=409,
-        content={
-            "error": {
-                "code": "DATA_CONFLICT",
-                "message": "Resource conflicts with existing data",
-                "details": {},
-            }
-        },
+        content=error_body("DATA_CONFLICT", "Resource conflicts with existing data"),
     )
 
 
@@ -107,9 +123,9 @@ async def get_attendance(
     return dump(row)
 
 
-async def upsert(
+async def upsert_row(
     schedule_id: UUID, student_id: UUID, payload: dict[str, Any], session: AsyncSession
-):
+) -> Attendance:
     week = (
         date.fromisoformat(payload["week_start_date"])
         if isinstance(payload.get("week_start_date"), str)
@@ -130,9 +146,8 @@ async def upsert(
     else:
         for key, value in payload.items():
             setattr(row, key, value)
-    await session.commit()
-    await session.refresh(row)
-    return dump(row)
+    await session.flush()
+    return row
 
 
 @app.put(
@@ -155,7 +170,10 @@ async def mark_attendance(
             "STUDENT_NOT_IN_SCHEDULE_GROUP",
             "Student does not belong to the schedule group",
         )
-    return await upsert(schedule_id, student_id, data, session)
+    row = await upsert_row(schedule_id, student_id, data, session)
+    await session.commit()
+    await session.refresh(row)
+    return dump(row)
 
 
 @app.put("/api/v1/attendance/schedules/{schedule_id}", tags=["attendance"])
@@ -165,8 +183,8 @@ async def mark_schedule_attendance(
     session: AsyncSession = Depends(get_session),
 ):
     """Replace or create attendance marks for a schedule."""
-    result = []
     schedule = await fetch_json("schedule", "/api/v1/schedule", schedule_id)
+    validated_items = []
     for item in payload:
         data = AttendanceBatchMark.model_validate(item).model_dump()
         student_id = data.pop("student_id")
@@ -177,8 +195,16 @@ async def mark_schedule_attendance(
                 "STUDENT_NOT_IN_SCHEDULE_GROUP",
                 "Student does not belong to the schedule group",
             )
-        result.append(await upsert(schedule_id, student_id, data, session))
-    return result
+        validated_items.append((student_id, data))
+
+    rows = [
+        await upsert_row(schedule_id, student_id, data, session)
+        for student_id, data in validated_items
+    ]
+    await session.commit()
+    for row in rows:
+        await session.refresh(row)
+    return [dump(row) for row in rows]
 
 
 @app.get("/api/v1/attendance/schedules/{schedule_id}", tags=["attendance"])

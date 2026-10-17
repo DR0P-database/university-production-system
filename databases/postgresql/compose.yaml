@@ -31,7 +31,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - services-network
+      - database-network
 
   pgadmin:
     image: dpage/pgadmin4:9.11
@@ -47,7 +47,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - services-network
+      - database-network
 
 volumes:
   postgres-data:

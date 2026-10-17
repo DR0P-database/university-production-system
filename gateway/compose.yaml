@@ -8,18 +8,25 @@ services:
       STUDENT_SERVICE_URL: http://student-service:8000
       SCHEDULE_SERVICE_URL: http://schedule-service:8000
       ATTENDANCE_SERVICE_URL: http://attendance-service:8000
+      UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-5}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
     ports:
       - "${GATEWAY_PORT:-8000}:8000"
     depends_on:
       academic-service:
-        condition: service_started
+        condition: service_healthy
       student-service:
-        condition: service_started
+        condition: service_healthy
       schedule-service:
-        condition: service_started
+        condition: service_healthy
       attendance-service:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     networks:
       - services-network

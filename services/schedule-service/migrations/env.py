@@ -17,7 +17,11 @@ config = context.config
 if config.config_file_name is not None and config.get_section("formatters"):
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")
+for parent in Path(__file__).resolve().parents:
+    env_file = parent / ".env"
+    if env_file.is_file():
+        load_dotenv(env_file)
+        break
 
 
 def database_url() -> str:

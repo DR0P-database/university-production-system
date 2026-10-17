@@ -10,7 +10,11 @@ from dotenv import load_dotenv
 from app import models  # noqa: F401 - registers all model tables
 
 
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")
+for parent in Path(__file__).resolve().parents:
+    env_file = parent / ".env"
+    if env_file.is_file():
+        load_dotenv(env_file)
+        break
 from app.db import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import URL
