@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import os
+from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any
 from uuid import UUID
@@ -15,14 +18,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
 
 from app.clients import fetch_json
-from app.db import get_session
+from app.db import SessionLocal, get_session
 from app.errors import api_error
+from app.graph_store import GraphUnavailable, schedule_graph
 from app.models import Schedule
 from app.request_id import get_request_id, request_id_middleware
-from app.schemas import ScheduleCreate
+from app.schemas import ScheduleCreate, SchedulePage
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if os.getenv("PROJECTIONS_BOOTSTRAP_ON_STARTUP", "false").lower() == "true":
+        async with SessionLocal() as session:
+            await schedule_graph.rebuild(session)
+    yield
+    await schedule_graph.close()
+
 
 app = FastAPI(
-    title="Schedule Service", version="1.0.0", description="University schedule API"
+    title="Schedule Service",
+    version="1.0.0",
+    description="University schedule API",
+    lifespan=lifespan,
 )
 app.middleware("http")(request_id_middleware)
 
@@ -79,6 +98,20 @@ async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
 
 def dump(row: Any) -> dict[str, Any]:
     return {c.key: getattr(row, c.key) for c in inspect(row).mapper.column_attrs}
+
+
+async def sync_graph(row: Schedule) -> None:
+    try:
+        await schedule_graph.upsert(row)
+    except GraphUnavailable:
+        logger.warning("Could not update Neo4j schedule projection", exc_info=True)
+
+
+async def delete_from_graph(schedule_id: UUID) -> None:
+    try:
+        await schedule_graph.delete(schedule_id)
+    except GraphUnavailable:
+        logger.warning("Could not delete Neo4j schedule projection", exc_info=True)
 
 
 @app.get("/api/v1/schedule", tags=["schedule"])
@@ -151,6 +184,7 @@ async def create_schedule(
     session.add(row)
     await session.commit()
     await session.refresh(row)
+    await sync_graph(row)
     return dump(row)
 
 
@@ -193,6 +227,7 @@ async def patch_schedule(
             setattr(row, key, value)
     await session.commit()
     await session.refresh(row)
+    await sync_graph(row)
     return dump(row)
 
 
@@ -205,6 +240,7 @@ async def delete_schedule(
         raise HTTPException(404, "Schedule not found")
     await session.delete(row)
     await session.commit()
+    await delete_from_graph(schedule_id)
 
 
 @app.get("/api/v1/schedule/groups/{group_id}", tags=["schedule"])
@@ -223,6 +259,47 @@ async def group_schedule(
         "offset": offset,
         "total": total or 0,
     }
+
+
+@app.get(
+    "/api/v1/schedule/students/{student_id}",
+    tags=["graph"],
+    response_model=SchedulePage,
+)
+async def student_schedule_from_graph(
+    student_id: UUID,
+    status: str | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Read a student's group schedule entirely from Neo4j."""
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise api_error(
+            400, "INVALID_DATE_RANGE", "date_from must not be after date_to"
+        )
+    try:
+        result = await schedule_graph.student_schedule(
+            student_id,
+            status=status,
+            date_from=date_from,
+            date_to=date_to,
+            offset=offset,
+            limit=limit,
+        )
+    except GraphUnavailable as exc:
+        raise HTTPException(
+            503,
+            {
+                "code": "GRAPH_UNAVAILABLE",
+                "message": "Schedule graph is unavailable",
+                "details": {},
+            },
+        ) from exc
+    if result is None:
+        raise HTTPException(404, "Student not found in graph")
+    return result
 
 
 @app.get("/health", tags=["system"])

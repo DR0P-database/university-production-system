@@ -93,9 +93,8 @@ erDiagram
         UUID lecture_id FK
         VARCHAR content_type
         VARCHAR title
-        TEXT content_text
         VARCHAR file_url
-        JSONB metadata
+        TEXT content_ref
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
@@ -343,13 +342,22 @@ erDiagram
         UUID lecture_id FK
         VARCHAR content_type
         VARCHAR title
-        TEXT content_text
         VARCHAR file_url
-        JSONB metadata
+        TEXT content_ref
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
 ```
+
+Полный `content_text` и произвольный `metadata` материала хранятся в MongoDB
+в коллекции `academic_content.lecture_material_contents`. `_id` документа равен
+UUID строки `lecture_materials`, а PostgreSQL `content_ref` явно указывает на
+этот документ. Публичный REST API объединяет обе записи и сохраняет прежний
+контракт.
+
+Elasticsearch содержит только поисковую проекцию лекции: `title`, `annotation`,
+`content_text`, `lecture_type` и `course`. Источником текста остаётся MongoDB,
+а структурированных связей — PostgreSQL.
 
 Ограничение для таблицы `department_specialties`:
 
@@ -486,3 +494,41 @@ flowchart LR
 ```text
 UNIQUE (schedule_id, student_id, week_start_date)
 ```
+
+## Redis-проекция студента
+
+PostgreSQL `student_db` остаётся источником истины. `student-service` применяет
+cache-aside только для получения одного студента по уникальному
+`student_card_number`:
+
+```text
+student:card:{student_card_number} -> полный публичный Student JSON
+TTL = STUDENT_CACHE_TTL_SECONDS (по умолчанию 86400 секунд / 24 часа)
+```
+
+При промахе или недоступности Redis выполняется запрос в PostgreSQL. После
+создания или изменения студента значение записывается в кэш, а при изменении
+номера или удалении старый ключ инвалидируется.
+
+## Neo4j-проекция структуры, студентов и расписания
+
+PostgreSQL-базы остаются источниками истины. Каждый сервис проецирует в Neo4j
+собственные сущности:
+
+```text
+(University)-[:HAS_INSTITUTE]->(Institute)
+  -[:HAS_DEPARTMENT]->(Department)
+  -[:OFFERS_SPECIALTY]->(Specialty)
+
+(Department)-[:HAS_GROUP]->(StudentGroup)
+(StudentGroup)-[:STUDIES_SPECIALTY]->(Specialty)
+(StudentGroup)-[:HAS_STUDENT]->(Student)
+(StudentGroup)-[:HAS_SCHEDULE]->(Schedule)
+```
+
+Курсы, лекции и посещаемость в Neo4j не сохраняются. Узлы имеют уникальные
+ограничения по UUID. Academic-, student- и schedule-service при старте
+синхронизируют только свою часть графа, не удаляя узлы других доменов;
+дальнейшие CRUD-операции обновляют проекцию через `MERGE`. Graph API позволяют
+получить студентов университета, университет и группу студента, а также
+расписание студента без чтения PostgreSQL.

@@ -1,7 +1,9 @@
 # TODO — план развития университетской микросервисной системы
 
-- [] Полный текст должен хранится в нужной спец. БД и это не postgres. С остальными данными то же. Postgres является только ссылкой на файл или другой обьект 
-- [] neo4j основная цель -- связь студентов с лекцией 
+- [x] Полный текст материала хранится в MongoDB, а PostgreSQL содержит только структурированные поля, `content_ref` и `file_url`.
+- [] Реальные файлы и бинарные напрмиер презентации и пдф в этой лабораторной работе не будут использоваться только текстовые документы только текст
+- [x] Neo4j хранит структуру университета, группы, студентов и расписание;
+  посещаемость остаётся только в attendance_db.
 
 Этот файл фиксирует порядок работ по проекту так, чтобы каждая следующая лабораторная расширяла предыдущую и не требовала переработки уже готовой архитектуры.
 
@@ -512,71 +514,72 @@ Attendance partitioned
 
 # Задел на последующие работы — CDC и polyglot persistence
 
-PostgreSQL остаётся source of truth.
+PostgreSQL остаётся source of truth для структурированных данных. MongoDB
+является хранилищем полного содержимого материалов, Elasticsearch — только
+поисковой проекцией.
 
 Специализированные хранилища используются как projection/read-model/cache:
 
 ```text
-PostgreSQL
+PostgreSQL (структура) + MongoDB (содержимое материалов)
     |
-    | source of truth
-    v
-events / CDC
+    +--> academic-service -> Elasticsearch
     |
-    +--> Redis
-    +--> MongoDB
-    +--> Neo4j
-    +--> Elasticsearch
+    +--> student-service -> Redis
+    |
+    `--> academic-service -> Neo4j
 ```
 
 ## Redis
 
-Планируемые данные:
+Кэшируемые данные:
 
 ```text
-schedule cache
-current lessons
-sessions
+student:card:{student_card_number} -> Student JSON
 ```
 
 TODO:
 
-- [ ] Определить key naming.
-- [ ] Определить TTL.
-- [ ] Выбрать cache pattern.
-- [ ] Определить invalidation strategy.
-- [ ] Обеспечить fallback на PostgreSQL при недоступности Redis.
+- [x] Определить key naming: `student:card:{student_card_number}`.
+- [x] Определить TTL: `STUDENT_CACHE_TTL_SECONDS`, по умолчанию 86400 секунд
+  (24 часа).
+- [x] Использовать cache-aside для поиска студента по номеру билета.
+- [x] Инвалидировать старый ключ при изменении и удалении студента.
+- [x] Обеспечить fallback на PostgreSQL при недоступности Redis.
 
 ## Neo4j
 
-Планируемая проекция:
+Общая read-проекция:
 
 ```text
-University
--> Institute
--> Department
--> Specialty
--> LectureCourse
+University -> Institute -> Department -> StudentGroup -> Student
+                                      `-> StudentGroup -> Schedule
+StudentGroup -> Specialty
 ```
 
 TODO:
 
-- [ ] Определить nodes.
-- [ ] Определить relationships.
-- [ ] Настроить синхронизацию.
-- [ ] Реализовать графовые запросы.
-- [ ] PostgreSQL оставить authoritative source.
+- [x] Определить академические nodes с уникальными UUID.
+- [x] Определить relationships академической иерархии.
+- [x] Настроить синхронизацию через academic-service.
+- [x] Настроить синхронизацию групп и студентов через student-service.
+- [x] Настроить синхронизацию расписания через schedule-service.
+- [x] Пересобирать доменные части графа из PostgreSQL при старте.
+- [x] Реализовать запрос структуры университета и статистики графа через API.
+- [x] Реализовать Neo4j API университет → студенты и студент → университет/группа.
+- [x] Реализовать Neo4j API расписания студента.
+- [x] PostgreSQL оставить authoritative source.
 
 ## MongoDB
 
-Планируемая проекция: `LectureMaterial`.
+Коллекция: `academic_content.lecture_material_contents`.
 
 TODO:
 
-- [ ] Определить document schema.
-- [ ] Группировать материалы как агрегат лекции, если это удобно для чтения.
-- [ ] Настроить синхронизацию с PostgreSQL.
-- [ ] Не делать MongoDB источником истины для структурированных данных.
+- [x] Хранить документ на материал: `_id`, `content_text`, `metadata`.
+- [x] Использовать UUID материала как MongoDB `_id` и `content_ref` в PostgreSQL.
+- [x] Выполнять запись и чтение через драйвер academic-service.
+- [x] Не дублировать в MongoDB структурированные поля PostgreSQL.
 
 ## Elasticsearch
 
@@ -594,13 +597,14 @@ course
 
 TODO:
 
-- [ ] Создать mapping.
+- [x] Создать строгий mapping только для поисковых полей.
 - [ ] Настроить analyzer.
 - [ ] Настроить полнотекстовый поиск.
 - [ ] Настроить fuzzy search.
 - [ ] Настроить highlight.
-- [ ] Настроить обновление индекса через CDC/events.
-- [ ] PostgreSQL оставить source of truth.
+- [x] Обновлять индекс непосредственно из academic-service при текущем REST CRUD.
+- [ ] Перевести обновление индекса на CDC/events после появления брокера и outbox.
+- [x] Не использовать Elasticsearch как source of truth.
 
 ---
 
@@ -611,7 +615,8 @@ TODO:
 3. Никаких cross-database SQL-запросов.
 4. Межсервисные связи — UUID без PostgreSQL FK.
 5. PostgreSQL — источник истины для структурированных данных.
-6. Redis/MongoDB/Neo4j/Elasticsearch — производные представления или кэш.
+6. Elasticsearch/Neo4j и Redis — производные представления или кэш; MongoDB
+   хранит неструктурированное содержимое материалов.
 7. Синхронный запрос с немедленным ответом — REST.
 8. Факт произошедшего изменения — event.
 9. Domain layer не должен зависеть от RabbitMQ/Redis/Elastic/Mongo/Neo4j напрямую.

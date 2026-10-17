@@ -22,7 +22,9 @@ from app.request_id import get_request_id, request_id_middleware
 from app.schemas import AttendanceBatchMark, AttendanceMark
 
 app = FastAPI(
-    title="Attendance Service", version="1.0.0", description="Attendance journal API"
+    title="Attendance Service",
+    version="1.0.0",
+    description="Attendance journal API",
 )
 app.middleware("http")(request_id_middleware)
 

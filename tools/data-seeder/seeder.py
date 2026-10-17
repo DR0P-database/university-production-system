@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -73,6 +74,271 @@ PATRONYMICS = (
 
 
 @dataclass(frozen=True)
+class LessonTopic:
+    title: str
+    keywords: tuple[str, ...]
+    theory: str
+    example: str
+    exercise: str
+
+
+LESSON_TOPICS = (
+    LessonTopic(
+        title="Архитектура информационных систем",
+        keywords=("архитектура", "компонент", "интерфейс", "связность"),
+        theory=(
+            "Архитектура описывает систему через её компоненты, ответственность "
+            "каждого компонента и правила взаимодействия между ними. Хорошая "
+            "декомпозиция уменьшает связность, делает зависимости явными и позволяет "
+            "изменять одну часть системы без каскадной переработки остальных."
+        ),
+        example=(
+            "Учебную платформу можно разделить на контур учебных программ, студентов, "
+            "расписания и посещаемости. Каждый контур владеет своими данными, а наружу "
+            "публикует стабильный контракт. Идентификаторы связанных сущностей передаются "
+            "между контурами, но внутренние таблицы одного контура недоступны другому."
+        ),
+        exercise=(
+            "Разделите предложенную университетскую систему на компоненты, назначьте "
+            "владельца каждой сущности и нарисуйте направления разрешённых зависимостей."
+        ),
+    ),
+    LessonTopic(
+        title="Моделирование данных и нормализация",
+        keywords=("модель данных", "нормализация", "ключ", "ограничение"),
+        theory=(
+            "Модель данных фиксирует сущности, их атрибуты, идентификаторы и инварианты. "
+            "Нормализация устраняет повторяющиеся факты и аномалии обновления. Первичный "
+            "ключ однозначно определяет запись, внешний ключ поддерживает локальную связь, "
+            "а CHECK и UNIQUE превращают бизнес-правила в проверяемые ограничения."
+        ),
+        example=(
+            "Название специальности не следует копировать в каждую группу. Группа хранит "
+            "UUID специальности, а её название читается у владельца академических данных. "
+            "Так переименование выполняется один раз и не создаёт противоречивых значений."
+        ),
+        exercise=(
+            "Найдите функциональные зависимости в наборе данных о студентах и группах, "
+            "предложите таблицы в третьей нормальной форме и перечислите ограничения."
+        ),
+    ),
+    LessonTopic(
+        title="Транзакции и конкурентный доступ",
+        keywords=("транзакция", "атомарность", "изоляция", "идемпотентность"),
+        theory=(
+            "Транзакция объединяет изменения, которые должны быть применены атомарно. "
+            "Уровень изоляции определяет, какие промежуточные состояния видят параллельные "
+            "операции. В распределённой системе общей транзакции обычно нет, поэтому "
+            "особенно важны идемпотентные команды, повторяемые операции и компенсация."
+        ),
+        example=(
+            "Повторный PUT отметки посещаемости с одинаковыми schedule_id и student_id "
+            "обновляет одну запись, а не создаёт дубликат. Уникальное ограничение защищает "
+            "инвариант на уровне базы даже при одновременных запросах."
+        ),
+        exercise=(
+            "Смоделируйте два конкурентных запроса отметки посещаемости, определите точку "
+            "конфликта и предложите идемпотентный алгоритм с уникальным ключом."
+        ),
+    ),
+    LessonTopic(
+        title="REST API и интеграция сервисов",
+        keywords=("REST", "HTTP", "контракт", "валидация"),
+        theory=(
+            "REST-контракт задаёт ресурсы, методы, структуры запросов и семантику кодов "
+            "ответа. Валидация синтаксиса выполняется на границе сервиса, а бизнес-правила "
+            "проверяются владельцем данных. GET безопасен, PUT должен быть идемпотентным, "
+            "POST создаёт ресурс, PATCH меняет только переданные свойства."
+        ),
+        example=(
+            "При создании занятия schedule-service запрашивает существование лекции и "
+            "группы через их API. Ответ 404 означает отсутствующую сущность, 400 — нарушение "
+            "бизнес-правила, 422 — неверную структуру входных данных, 503 — недоступность "
+            "зависимого сервиса."
+        ),
+        exercise=(
+            "Составьте запросы создания и изменения учебного материала, перечислите "
+            "ожидаемые HTTP-коды для успешного сценария и четырёх классов ошибок."
+        ),
+    ),
+    LessonTopic(
+        title="Индексы и производительность запросов",
+        keywords=("индекс", "селективность", "план запроса", "полнотекстовый поиск"),
+        theory=(
+            "Индекс ускоряет поиск ценой дополнительного места и стоимости обновления. "
+            "Полезность индекса зависит от селективности, порядка колонок и реальных "
+            "шаблонов запросов. Реляционные индексы обслуживают точные фильтры и связи, "
+            "а поисковый индекс хранит подготовленное представление текста."
+        ),
+        example=(
+            "Для списка материалов лекции нужен индекс по lecture_id. Для поиска фразы "
+            "в конспектах создаётся отдельный документ Elasticsearch, содержащий название, "
+            "аннотацию и агрегированный текст, но не служебные поля PostgreSQL и MongoDB."
+        ),
+        exercise=(
+            "Предложите индексы для фильтрации расписания по группе и диапазону дат, затем "
+            "сравните их назначение с полнотекстовым индексом лекций."
+        ),
+    ),
+    LessonTopic(
+        title="Надёжность и наблюдаемость",
+        keywords=("надёжность", "healthcheck", "correlation_id", "метрика"),
+        theory=(
+            "Наблюдаемая система позволяет связать пользовательский запрос с логами, "
+            "метриками и обращениями к зависимостям. Healthcheck показывает готовность "
+            "экземпляра принимать трафик, correlation_id объединяет события одного запроса, "
+            "а таймауты не дают сбою зависимости бесконечно удерживать ресурсы."
+        ),
+        example=(
+            "Gateway присваивает request_id и передаёт его сервисам. Если upstream не "
+            "ответил за заданное время, клиент получает 503 с тем же идентификатором, "
+            "по которому оператор находит связанные записи во всех логах."
+        ),
+        exercise=(
+            "Опишите проверку готовности academic-service и набор логов и метрик, которые "
+            "позволят отличить сбой PostgreSQL, MongoDB и Elasticsearch."
+        ),
+    ),
+)
+
+
+def lecture_material_payloads(lecture: JsonObject) -> list[JsonObject]:
+    order_number = int(lecture["order_number"])
+    topic = LESSON_TOPICS[(order_number - 1) % len(LESSON_TOPICS)]
+    lesson_kind = "лекция" if lecture["lecture_type"] == "lecture" else "практика"
+    keywords = ", ".join(topic.keywords)
+
+    notes = f"""# {topic.title}
+
+Занятие: {lecture["title"]}
+Формат: {lesson_kind}, {lecture["duration_minutes"]} минут.
+
+## Цели
+
+После занятия студент должен уметь объяснить тему «{topic.title}», корректно
+использовать понятия {keywords}, разобрать типовой пример и обосновать выбранное
+решение с учётом ограничений системы.
+
+## Основные понятия
+
+{topic.theory}
+
+Ключевые термины занятия: {keywords}. Их следует рассматривать не изолированно,
+а как части одного процесса проектирования: сначала формулируется инвариант,
+затем выбирается владелец данных, после этого определяется контракт и только
+потом — конкретный механизм хранения или интеграции.
+
+## Разбор примера
+
+{topic.example}
+
+При разборе примера важно проверить три аспекта: где находится источник истины,
+какая операция изменяет состояние и что произойдёт при повторе либо частичном
+сбое. Ответ должен включать не только успешный путь, но и наблюдаемую ошибку,
+которую сможет интерпретировать клиент.
+
+## Контрольный список
+
+1. Назовите сущности и их владельцев.
+2. Сформулируйте проверяемые инварианты.
+3. Укажите границы транзакции и внешние зависимости.
+4. Опишите поведение при повторном запросе и недоступности зависимости.
+5. Выберите данные, необходимые для диагностики результата.
+
+## Вопросы для самопроверки
+
+- Почему выбранное решение сохраняет целостность данных?
+- Какие поля являются источником истины, а какие — производной проекцией?
+- Как доказать корректность решения автоматическим тестом?
+- Как изменится решение при росте объёма данных в десять раз?
+
+## Итог
+
+Тема «{topic.title}» связывает модель данных, API и эксплуатационные свойства.
+Главный результат занятия — умение объяснить компромиссы и подтвердить решение
+ограничениями, тестами и наблюдаемым поведением системы.
+"""
+
+    exercise = f"""# Практическая работа: {topic.title}
+
+Связанное занятие: {lecture["title"]}.
+
+## Постановка задачи
+
+{topic.exercise}
+
+Работа выполняется на небольшом воспроизводимом наборе данных. Зафиксируйте
+исходные условия, выполните основной сценарий, затем намеренно создайте ошибочную
+ситуацию и сравните фактическое поведение с ожидаемым контрактом.
+
+## Порядок выполнения
+
+1. Опишите входные данные и ожидаемый результат до запуска команд.
+2. Выполните успешный сценарий и сохраните идентификаторы созданных объектов.
+3. Повторите операцию и проверьте, появились ли дубликаты.
+4. Нарушьте одно бизнес-правило и зафиксируйте код и тело ошибки.
+5. Проверьте итоговое состояние через API, а не прямым запросом в чужую БД.
+6. Сформулируйте вывод, используя термины: {keywords}.
+
+## Ожидаемый результат
+
+Должен получиться воспроизводимый пример, в котором успешный сценарий сохраняет
+целостное состояние, повторный запуск не создаёт лишние сущности, а ошибочный
+сценарий возвращает предсказуемую структурированную ошибку. Результат должен
+быть понятен по запросам и ответам без ручного исправления данных.
+
+## Критерии проверки
+
+- входные и выходные данные приведены полностью;
+- идентификаторы связанных сущностей согласованы;
+- объяснена причина выбранного HTTP-кода или ограничения;
+- присутствует минимум одна автоматическая проверка;
+- вывод связывает наблюдаемый результат с темой «{topic.title}».
+
+## Дополнительное задание
+
+Предложите альтернативную реализацию, перечислите её преимущества и недостатки,
+а затем укажите метрику, по которой можно сравнить оба варианта.
+"""
+
+    common_metadata = {
+        "source": "data-seeder",
+        "schema_version": 2,
+        "language": "ru",
+        "format": "markdown",
+        "topic": topic.title,
+        "keywords": list(topic.keywords),
+        "lecture_type": lecture["lecture_type"],
+    }
+    return [
+        {
+            "lecture_id": lecture["id"],
+            "content_type": "text",
+            "title": f"{lecture['title']} — конспект",
+            "content_text": notes.strip(),
+            "file_url": None,
+            "metadata_json": {
+                **common_metadata,
+                "material_number": 1,
+                "estimated_reading_minutes": 8,
+            },
+        },
+        {
+            "lecture_id": lecture["id"],
+            "content_type": "exercise",
+            "title": f"{lecture['title']} — практическое задание",
+            "content_text": exercise.strip(),
+            "file_url": None,
+            "metadata_json": {
+                **common_metadata,
+                "material_number": 2,
+                "estimated_reading_minutes": 5,
+            },
+        },
+    ]
+
+
+@dataclass(frozen=True)
 class Config:
     student_count: int
     university_count: int
@@ -119,6 +385,24 @@ class Config:
     @property
     def expected_attendance_count(self) -> int:
         return self.student_count * self.week_count
+
+    @property
+    def expected_academic_graph_node_count(self) -> int:
+        return (
+            self.university_count * 11
+            + self.expected_group_count
+            + self.student_count
+            + self.expected_schedule_count
+        )
+
+    @property
+    def expected_academic_graph_relationship_count(self) -> int:
+        return (
+            self.university_count * 10
+            + self.expected_group_count * 2
+            + self.student_count
+            + self.expected_schedule_count
+        )
 
 
 class ServiceApi:
@@ -186,6 +470,21 @@ class ServiceApi:
             if offset >= page["total"] or not page_items:
                 return items
 
+    async def get_with_headers(
+        self, service: str, path: str
+    ) -> tuple[Any, httpx.Headers]:
+        url = f"{self.base_urls[service]}{path}"
+        async with self.semaphore:
+            response = await self.client.get(
+                url,
+                headers={"X-Request-ID": "verify-data"},
+            )
+        if response.is_error:
+            raise RuntimeError(
+                f"GET {url} failed with {response.status_code}: {response.text}"
+            )
+        return response.json(), response.headers
+
     async def healthcheck(self) -> None:
         for service, base_url in self.base_urls.items():
             for attempt in range(60):
@@ -218,6 +517,40 @@ async def ensure(
     created = await api.request("POST", service, path, json=payload)
     cache[key] = created
     return created
+
+
+async def sync_material(
+    api: ServiceApi,
+    cache: dict[int, JsonObject],
+    material_number: int,
+    payload: JsonObject,
+) -> JsonObject:
+    existing = cache.get(material_number)
+    if existing is None:
+        material = await api.request(
+            "POST", "academic", "/api/v1/academic/materials", json=payload
+        )
+    else:
+        comparable_fields = (
+            "lecture_id",
+            "content_type",
+            "title",
+            "content_text",
+            "file_url",
+            "metadata_json",
+        )
+        if all(
+            existing.get(field) == payload.get(field) for field in comparable_fields
+        ):
+            return existing
+        material = await api.request(
+            "PATCH",
+            "academic",
+            f"/api/v1/academic/materials/{existing['id']}",
+            json=payload,
+        )
+    cache[material_number] = material
+    return material
 
 
 async def run_limited[T](
@@ -441,7 +774,7 @@ class DataSeeder:
                     order_number,
                     {
                         "course_id": course["id"],
-                        "title": f"[SEED] {course_name}, занятие {order_number}",
+                        "title": f"{course_name}, занятие {order_number}",
                         "annotation": "Автоматически сгенерированная лекция",
                         "lecture_type": (
                             "lecture" if lecture_index < 3 else "practice"
@@ -456,37 +789,24 @@ class DataSeeder:
         self.lecture_ids_by_specialty[specialty["id"]] = lecture_ids
 
     async def seed_materials(self, lecture: JsonObject) -> None:
-        materials = by(
-            await self.api.list_all(
-                "academic",
-                "/api/v1/academic/materials",
-                lecture_id=lecture["id"],
-            ),
-            "title",
+        existing_materials = await self.api.list_all(
+            "academic",
+            "/api/v1/academic/materials",
+            lecture_id=lecture["id"],
         )
-        for material_index in range(2):
-            material_number = material_index + 1
-            title = f"[SEED] Материал {lecture['id']} / {material_number}"
-            await ensure(
+        materials = {
+            int(material["metadata_json"]["material_number"]): material
+            for material in existing_materials
+            if material.get("metadata_json", {}).get("source") == "data-seeder"
+            and material.get("metadata_json", {}).get("material_number") is not None
+        }
+        for payload in lecture_material_payloads(lecture):
+            material_number = int(payload["metadata_json"]["material_number"])
+            await sync_material(
                 self.api,
-                "academic",
-                "/api/v1/academic/materials",
                 materials,
-                title,
-                {
-                    "lecture_id": lecture["id"],
-                    "content_type": "text" if material_index == 0 else "exercise",
-                    "title": title,
-                    "content_text": (
-                        "Автоматически сгенерированный учебный материал "
-                        f"для лекции {lecture['id']}"
-                    ),
-                    "file_url": None,
-                    "metadata_json": {
-                        "source": "data-seeder",
-                        "material_number": material_number,
-                    },
-                },
+                material_number,
+                payload,
             )
 
     async def seed_groups(self) -> None:
@@ -695,6 +1015,36 @@ def schedule_date(schedule: JsonObject) -> date:
     return value if isinstance(value, date) else date.fromisoformat(value)
 
 
+def expected_academic_graph_stats(
+    universities: list[JsonObject],
+    institutes: list[JsonObject],
+    departments: list[JsonObject],
+    specialties: list[JsonObject],
+    groups: list[JsonObject],
+    students: list[JsonObject],
+    schedules: list[JsonObject],
+    department_specialty_count: int,
+) -> dict[str, int]:
+    """Describe the complete PostgreSQL structure expected in Neo4j."""
+    return {
+        "universities": len(universities),
+        "institutes": len(institutes),
+        "departments": len(departments),
+        "specialties": len(specialties),
+        "groups": len(groups),
+        "students": len(students),
+        "schedules": len(schedules),
+        "relationships": (
+            len(institutes)
+            + len(departments)
+            + department_specialty_count
+            + len(groups) * 2
+            + len(students)
+            + len(schedules)
+        ),
+    }
+
+
 class DataVerifier:
     def __init__(self, api: ServiceApi, config: Config):
         self.api = api
@@ -702,33 +1052,35 @@ class DataVerifier:
 
     async def verify(self) -> None:
         await self.api.healthcheck()
+        all_universities = await self.api.list_all(
+            "academic", "/api/v1/academic/universities"
+        )
+        all_institutes = await self.api.list_all(
+            "academic", "/api/v1/academic/institutes"
+        )
+        all_departments = await self.api.list_all(
+            "academic", "/api/v1/academic/departments"
+        )
+        all_specialties = await self.api.list_all(
+            "academic", "/api/v1/academic/specialties"
+        )
         universities = [
             item
-            for item in await self.api.list_all(
-                "academic", "/api/v1/academic/universities"
-            )
+            for item in all_universities
             if (item.get("short_name") or "").startswith("SEED-U")
         ]
         institutes = [
             item
-            for item in await self.api.list_all(
-                "academic", "/api/v1/academic/institutes"
-            )
+            for item in all_institutes
             if (item.get("short_name") or "").startswith("SEED-U")
         ]
         departments = [
             item
-            for item in await self.api.list_all(
-                "academic", "/api/v1/academic/departments"
-            )
+            for item in all_departments
             if (item.get("short_name") or "").startswith("SEED-U")
         ]
         specialties = [
-            item
-            for item in await self.api.list_all(
-                "academic", "/api/v1/academic/specialties"
-            )
-            if item["code"].startswith("SEED-U")
+            item for item in all_specialties if item["code"].startswith("SEED-U")
         ]
         courses = [
             item
@@ -747,14 +1099,13 @@ class DataVerifier:
             )
             if (item.get("title") or "").startswith("[SEED]")
         ]
-        groups = [
-            item
-            for item in await self.api.list_all("student", "/api/v1/students/groups")
-            if item["name"].startswith("SEED-U")
-        ]
+        all_groups = await self.api.list_all("student", "/api/v1/students/groups")
+        all_students = await self.api.list_all("student", "/api/v1/students/students")
+        all_schedules = await self.api.list_all("schedule", "/api/v1/schedule")
+        groups = [item for item in all_groups if item["name"].startswith("SEED-U")]
         students = [
             item
-            for item in await self.api.list_all("student", "/api/v1/students/students")
+            for item in all_students
             if (item.get("email") or "").startswith("seed.student.")
         ]
 
@@ -784,6 +1135,18 @@ class DataVerifier:
             raise RuntimeError(
                 f"Seed counts do not match: expected={expected}, actual={actual}"
             )
+
+        for material in materials:
+            if not material.get("content_text"):
+                raise RuntimeError(
+                    f"Material content is missing from content storage: {material['id']}"
+                )
+            if material.get("metadata_json", {}).get("source") != "data-seeder":
+                raise RuntimeError(
+                    f"Material metadata is missing from content storage: {material['id']}"
+                )
+            if "content_ref" in material:
+                raise RuntimeError("Internal content_ref leaked into the public API")
 
         groups_by_id = {item["id"]: item for item in groups}
         courses_by_id = {item["id"]: item for item in courses}
@@ -859,6 +1222,94 @@ class DataVerifier:
                 f"found {attendance_count}"
             )
 
+        sample_student = min(students, key=lambda item: item["student_card_number"])
+        student_card_number = quote(sample_student["student_card_number"], safe="")
+        student_path = f"/api/v1/students/students/by-card/{student_card_number}"
+        first_lookup, _first_headers = await self.api.get_with_headers(
+            "student", student_path
+        )
+        second_lookup, second_headers = await self.api.get_with_headers(
+            "student", student_path
+        )
+        if first_lookup["id"] != sample_student["id"] or second_lookup != first_lookup:
+            raise RuntimeError("Student card lookup returned inconsistent data")
+        if second_headers.get("X-Cache") != "HIT":
+            raise RuntimeError("Student card lookup was not served from Redis cache")
+
+        graph_student = await self.api.request(
+            "GET",
+            "student",
+            f"/api/v1/students/graph/students/{sample_student['id']}",
+        )
+        sample_group = groups_by_id[sample_student["group_id"]]
+        departments_by_id = {item["id"]: item for item in departments}
+        institutes_by_id = {item["id"]: item for item in institutes}
+        expected_department = departments_by_id[sample_group["department_id"]]
+        expected_institute = institutes_by_id[expected_department["institute_id"]]
+        expected_university_id = expected_institute["university_id"]
+        if (
+            graph_student["student"]["id"] != sample_student["id"]
+            or graph_student["group"]["id"] != sample_group["id"]
+            or graph_student["university"]["id"] != expected_university_id
+        ):
+            raise RuntimeError("Neo4j student-to-university path is inconsistent")
+
+        university_students = await self.api.request(
+            "GET",
+            "student",
+            f"/api/v1/students/graph/universities/{expected_university_id}/students",
+            params={"limit": 1},
+        )
+
+        def university_id_for(student: JsonObject) -> str:
+            group = groups_by_id[student["group_id"]]
+            department = departments_by_id[group["department_id"]]
+            institute = institutes_by_id[department["institute_id"]]
+            return institute["university_id"]
+
+        expected_university_students = sum(
+            university_id_for(student) == expected_university_id for student in students
+        )
+        if university_students["total"] != expected_university_students:
+            raise RuntimeError("Neo4j university student list is inconsistent")
+
+        graph_schedule = await self.api.request(
+            "GET",
+            "schedule",
+            f"/api/v1/schedule/students/{sample_student['id']}",
+        )
+        if graph_schedule["total"] != self.config.week_count * 3:
+            raise RuntimeError("Neo4j student schedule is inconsistent")
+
+        graph_stats = await self.api.request(
+            "GET", "academic", "/api/v1/academic/graph/stats"
+        )
+        department_specialties = await asyncio.gather(
+            *(
+                self.api.list_all(
+                    "academic",
+                    f"/api/v1/academic/departments/{department['id']}/specialties",
+                )
+                for department in all_departments
+            )
+        )
+        expected_graph = expected_academic_graph_stats(
+            all_universities,
+            all_institutes,
+            all_departments,
+            all_specialties,
+            all_groups,
+            all_students,
+            all_schedules,
+            sum(len(relations) for relations in department_specialties),
+        )
+        actual_graph = {key: graph_stats[key] for key in expected_graph}
+        if actual_graph != expected_graph:
+            raise RuntimeError(
+                "Neo4j seed projection does not match: "
+                f"expected={expected_graph}, actual={actual_graph}"
+            )
+
         print("Verification passed:")
         print(f"  universities: {len(universities)}")
         print(f"  institutes:    {len(institutes)}")
@@ -871,6 +1322,11 @@ class DataVerifier:
         print(f"  students:      {len(students)}")
         print(f"  schedules:     {schedule_count}")
         print(f"  attendance:    {attendance_count}")
+        print("  redis lookup:  HIT")
+        print(
+            f"  graph nodes:   {sum(graph_stats[key] for key in expected_graph if key != 'relationships'):>7}"
+        )
+        print(f"  graph links:   {graph_stats['relationships']:>7}")
 
 
 async def main() -> None:

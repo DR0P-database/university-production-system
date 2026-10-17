@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal, Self
 from uuid import UUID
 
@@ -84,6 +85,24 @@ class MaterialCreate(StrictModel):
         return self
 
 
+class MaterialUpdate(StrictModel):
+    lecture_id: UUID | None = None
+    content_type: (
+        Literal["text", "presentation", "pdf", "video_link", "code_sample", "exercise"]
+        | None
+    ) = None
+    title: str | None = Field(default=None, max_length=500)
+    content_text: str | None = None
+    file_url: str | None = None
+    metadata_json: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_non_empty_patch(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("at least one material field must be provided")
+        return self
+
+
 class RelationCreate(StrictModel):
     specialty_id: UUID
     is_primary: bool = False
@@ -91,3 +110,76 @@ class RelationCreate(StrictModel):
 
 class RelationUpdate(StrictModel):
     is_primary: bool
+
+
+class TimestampedResponse(StrictModel):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class UniversityResponse(TimestampedResponse, UniversityCreate):
+    pass
+
+
+class InstituteResponse(TimestampedResponse, InstituteCreate):
+    pass
+
+
+class DepartmentResponse(TimestampedResponse, DepartmentCreate):
+    pass
+
+
+class SpecialtyResponse(TimestampedResponse, SpecialtyCreate):
+    pass
+
+
+class CourseResponse(TimestampedResponse, CourseCreate):
+    pass
+
+
+class LectureResponse(TimestampedResponse, LectureCreate):
+    pass
+
+
+class MaterialResponse(TimestampedResponse, MaterialCreate):
+    """Public material assembled from PostgreSQL and MongoDB."""
+
+
+class RelationResponse(RelationCreate):
+    department_id: UUID
+    created_at: datetime
+
+
+class Page[ResponseItem](StrictModel):
+    items: list[ResponseItem]
+    limit: int
+    offset: int
+    total: int
+
+
+class AcademicGraphStatsResponse(StrictModel):
+    universities: int
+    institutes: int
+    departments: int
+    specialties: int
+    groups: int
+    students: int
+    schedules: int
+    relationships: int
+
+
+class UniversityGraphPath(StrictModel):
+    university_id: UUID
+    university_name: str
+    institute_id: UUID | None = None
+    institute_name: str | None = None
+    department_id: UUID | None = None
+    department_name: str | None = None
+    specialty_id: UUID | None = None
+    specialty_name: str | None = None
+
+
+class UniversityGraphResponse(StrictModel):
+    university_id: UUID
+    paths: list[UniversityGraphPath]

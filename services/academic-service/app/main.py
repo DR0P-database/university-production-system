@@ -1,17 +1,45 @@
+import logging
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+from pymongo.errors import PyMongoError
 from sqlalchemy.exc import IntegrityError
 
+from app.academic_graph import academic_graph
 from app.api import router
+from app.content_store import content_store
+from app.db import SessionLocal
+from app.projections import sync_all_lecture_projections
 from app.request_id import get_request_id, request_id_middleware
+from app.search_store import search_store
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if os.getenv("PROJECTIONS_BOOTSTRAP_ON_STARTUP", "false").lower() == "true":
+        await content_store.ensure_indexes()
+        await search_store.ensure_index()
+        async with SessionLocal() as session:
+            await academic_graph.rebuild(session)
+            await sync_all_lecture_projections(session)
+    yield
+    await academic_graph.close()
+    await content_store.close()
+    await search_store.close()
+
 
 app = FastAPI(
     title="Academic Service",
     version="1.0.0",
     description="University academic data API",
+    lifespan=lifespan,
 )
 app.include_router(router)
 app.middleware("http")(request_id_middleware)
@@ -70,6 +98,18 @@ async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
     return JSONResponse(
         status_code=409,
         content=error_body(code, "Resource conflicts with existing data"),
+    )
+
+
+@app.exception_handler(PyMongoError)
+async def mongodb_error(_: Request, exc: PyMongoError) -> JSONResponse:
+    logger.exception("MongoDB operation failed", exc_info=exc)
+    return JSONResponse(
+        status_code=503,
+        content=error_body(
+            "CONTENT_STORAGE_UNAVAILABLE",
+            "Material content storage is unavailable",
+        ),
     )
 
 

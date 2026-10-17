@@ -1,6 +1,6 @@
 # University Production System
 
-Микросервисный backend университетской системы на FastAPI и PostgreSQL.
+Микросервисный backend университетской системы на FastAPI с polyglot-хранением.
 
 ## Состав
 
@@ -9,7 +9,11 @@
 - `student-service` — группы и студенты;
 - `schedule-service` — расписание;
 - `attendance-service` — посещаемость;
-- четыре логические PostgreSQL-базы с отдельными владельцами и Alembic.
+- четыре логические PostgreSQL-базы с отдельными владельцами и Alembic;
+- MongoDB для полного текста и метаданных учебных материалов;
+- Elasticsearch для поисковой проекции лекций;
+- Redis для cache-aside поиска студента по номеру студенческого билета;
+- Neo4j для связной read-модели структуры, групп, студентов и расписания.
 
 ## Запуск
 
@@ -31,7 +35,7 @@ Gateway подключён только к `services-network`, PostgreSQL — т
 После запуска миграций загрузите идемпотентный набор через внутренние REST API:
 
 ```bash
-docker compose --profile tools run --rm seed-data
+docker compose --profile tools run --rm --build seed-data
 ```
 
 По умолчанию генератор создаёт 2 университета, 34 группы, 1000 студентов,
@@ -39,11 +43,39 @@ docker compose --profile tools run --rm seed-data
 студентов. Academic, student, schedule и attendance данные записываются только
 через API сервиса-владельца своей БД.
 
+Каждая лекция получает детерминированный Markdown-конспект и практическое
+задание с ключевыми словами. Повторный запуск обновляет устаревшие seed-материалы
+через API и не создаёт дубликаты.
+
+При создании материала academic-service оставляет структуру и ссылки в
+PostgreSQL, сохраняет `content_text` и `metadata_json` в MongoDB и обновляет
+поисковый документ лекции в Elasticsearch. Формат REST-запросов и ответов при
+этом не меняется.
+
+Обычные `GET /api/v1/academic/lectures` и `GET .../lectures/{id}` читают
+структурную карточку лекции из PostgreSQL. Запросы материалов сначала получают
+`id`, `lecture_id`, тип, название и ссылку из PostgreSQL, затем academic-service
+добавляет `content_text` и `metadata_json` из MongoDB. Elasticsearch не является
+источником ответа этих endpoints: в него отдельно собирается поисковый документ
+из карточки лекции и курса в PostgreSQL плюс текстов материалов в MongoDB.
+
+Создание и изменение студента обновляет Redis-кэш. Запрос по уникальному номеру
+`GET /api/v1/students/students/by-card/{student_card_number}` использует
+cache-aside и возвращает `X-Cache: HIT` или `MISS`; при недоступном Redis сервис
+продолжает читать PostgreSQL. TTL студента по умолчанию равен 24 часам и
+настраивается через `STUDENT_CACHE_TTL_SECONDS`.
+
+Neo4j хранит общую производную read-модель. Academic-service синхронизирует
+`University -> Institute -> Department -> Specialty`, student-service — группы,
+студентов и связи с кафедрой/специальностью, schedule-service — занятия группы.
+Каждый сервис пересобирает только принадлежащую ему часть графа из PostgreSQL и
+обновляет её после CRUD. Посещаемость в Neo4j не сохраняется.
+
 Повторный запуск безопасен и не создаёт дубликаты. Отдельная проверка уже
 загруженного набора:
 
 ```bash
-docker compose --profile tools run --rm verify-data
+docker compose --profile tools run --rm --build verify-data
 ```
 
 Параметры объёма находятся в `.env.example`. Подробный порядок и критерии
@@ -79,6 +111,46 @@ curl \
   -H "Authorization: Bearer $JWT_TOKEN" \
   "http://localhost:8000/api/v1/students/students?limit=30&offset=0"
 ```
+
+Поиск одного студента по номеру билета (повторите команду, чтобы увидеть
+`X-Cache: HIT`):
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/students/students/by-card/SEED-000001"
+```
+
+Проверка Neo4j-проекции и получение структуры конкретного университета:
+
+```bash
+curl \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/academic/graph/stats"
+
+curl \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/academic/graph/universities/<UNIVERSITY_UUID>"
+```
+
+Запросы, полностью выполняемые через Neo4j:
+
+```bash
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/students/graph/universities/<UNIVERSITY_UUID>/students"
+
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/students/graph/students/<STUDENT_UUID>"
+
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+  "http://localhost:8000/api/v1/schedule/students/<STUDENT_UUID>"
+```
+
+`verify-data` дополнительно проверяет Redis `HIT`. В чистой базе стандартный
+seed создаёт в Neo4j 1464 узла и 1496 связей. Если в PostgreSQL уже есть обычные
+данные, verifier не считает их ошибкой: он сравнивает Neo4j со всеми актуальными
+данными PostgreSQL, отдельно проверяет размер seed-набора и выполняет новые
+graph API по реальному студенту.
 
 ## Проверки
 

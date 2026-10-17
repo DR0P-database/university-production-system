@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -16,7 +15,6 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -253,14 +251,8 @@ class LectureMaterial(TimestampMixin, Base):
     )
     content_type: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str | None] = mapped_column(String(500))
-    content_text: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(Text)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(
-        "metadata",
-        JSONB,
-        nullable=False,
-        server_default=text("'{}'::jsonb"),
-    )
+    content_ref: Mapped[str | None] = mapped_column(Text)
 
     lecture: Mapped[Lecture] = relationship(back_populates="materials")
 
@@ -270,7 +262,7 @@ class LectureMaterial(TimestampMixin, Base):
             name="content_type_allowed",
         ),
         CheckConstraint(
-            "content_text IS NOT NULL OR file_url IS NOT NULL OR metadata <> '{}'::jsonb",
+            "content_ref IS NOT NULL OR file_url IS NOT NULL",
             name="material_has_content",
         ),
         Index("ix_lecture_materials_lecture_id", "lecture_id"),

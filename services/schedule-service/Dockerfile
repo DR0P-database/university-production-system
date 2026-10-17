@@ -11,7 +11,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 COPY pyproject.toml poetry.lock alembic.ini ./
-RUN poetry install --only main --no-root
+RUN poetry install --with neo4j --no-root
 
 COPY app ./app
 COPY migrations ./migrations

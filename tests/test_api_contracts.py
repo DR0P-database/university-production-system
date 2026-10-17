@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib
+
 from fastapi.testclient import TestClient
+from sqlalchemy.inspection import inspect
 
 
 def test_every_app_exposes_health_and_request_id(load_app):
@@ -35,10 +38,12 @@ def test_collection_endpoints_document_pagination(load_app):
             "/api/v1/students/groups",
             "/api/v1/students/students",
             "/api/v1/students/groups/{group_id}/students",
+            "/api/v1/students/graph/universities/{university_id}/students",
         ),
         "services/schedule-service": (
             "/api/v1/schedule",
             "/api/v1/schedule/groups/{group_id}",
+            "/api/v1/schedule/students/{student_id}",
         ),
         "services/attendance-service": (
             "/api/v1/attendance",
@@ -55,6 +60,33 @@ def test_collection_endpoints_document_pagination(load_app):
                 for parameter in schema["paths"][path]["get"]["parameters"]
             }
             assert {"limit", "offset"} <= parameters, (service, path)
+
+
+def test_student_card_lookup_is_exposed_before_uuid_route(load_app):
+    module = load_app("services/student-service")
+    paths = list(module.app.openapi()["paths"])
+
+    lookup = "/api/v1/students/students/by-card/{student_card_number}"
+    by_id = "/api/v1/students/students/{item_id}"
+    assert lookup in paths
+    assert paths.index(lookup) < paths.index(by_id)
+
+
+def test_graph_diagnostics_are_exposed(load_app):
+    module = load_app("services/academic-service")
+
+    paths = module.app.openapi()["paths"]
+    assert "/api/v1/academic/graph/stats" in paths
+    assert "/api/v1/academic/graph/universities/{university_id}" in paths
+
+    student_paths = load_app("services/student-service").app.openapi()["paths"]
+    assert (
+        "/api/v1/students/graph/universities/{university_id}/students" in student_paths
+    )
+    assert "/api/v1/students/graph/students/{student_id}" in student_paths
+
+    schedule_paths = load_app("services/schedule-service").app.openapi()["paths"]
+    assert "/api/v1/schedule/students/{student_id}" in schedule_paths
 
 
 def test_schedule_documents_date_range_and_rejects_invalid_range(load_app):
@@ -104,3 +136,75 @@ def test_manual_payload_validation_is_a_structured_422(load_app):
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     assert response.json()["error"]["request_id"] == response.headers["X-Request-ID"]
+
+
+def test_material_content_is_not_mapped_to_postgresql(load_app):
+    load_app("services/academic-service")
+    models = importlib.import_module("app.models")
+    columns = {
+        column.key for column in inspect(models.LectureMaterial).mapper.column_attrs
+    }
+
+    assert "content_ref" in columns
+    assert "content_text" not in columns
+    assert "metadata_json" not in columns
+
+
+def test_lecture_search_projection_contains_only_search_fields(load_app):
+    load_app("services/academic-service")
+    search_store = importlib.import_module("app.search_store")
+
+    assert set(search_store.LECTURE_INDEX_PROPERTIES) == {
+        "title",
+        "annotation",
+        "content_text",
+        "lecture_type",
+        "course",
+    }
+
+
+def test_material_openapi_has_composed_response_schema(load_app):
+    module = load_app("services/academic-service")
+    schema = module.app.openapi()
+    material = schema["components"]["schemas"]["MaterialResponse"]
+
+    assert {"id", "lecture_id", "content_text", "metadata_json"} <= set(
+        material["properties"]
+    )
+    assert "content_ref" not in material["properties"]
+    response = schema["paths"]["/api/v1/academic/materials/{item_id}"]["get"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]
+    assert response["$ref"].endswith("/MaterialResponse")
+    create_body = schema["paths"]["/api/v1/academic/materials"]["post"]["requestBody"][
+        "content"
+    ]["application/json"]["schema"]
+    update_body = schema["paths"]["/api/v1/academic/materials/{item_id}"]["patch"][
+        "requestBody"
+    ]["content"]["application/json"]["schema"]
+    assert create_body["$ref"].endswith("/MaterialCreate")
+    assert update_body["$ref"].endswith("/MaterialUpdate")
+
+
+def test_neo4j_projection_ownership_is_split_by_domain(load_app):
+    load_app("services/academic-service")
+    graph = importlib.import_module("app.academic_graph")
+
+    assert {config[0] for config in graph.ENTITY_CONFIG.values()} == {
+        "University",
+        "Institute",
+        "Department",
+        "Specialty",
+    }
+
+    load_app("services/student-service")
+    student_graph = importlib.import_module("app.graph_store")
+    assert hasattr(student_graph, "StudentGraphStore")
+
+    load_app("services/schedule-service")
+    schedule_graph = importlib.import_module("app.graph_store")
+    assert hasattr(schedule_graph, "ScheduleGraphStore")
+
+    attendance = load_app("services/attendance-service")
+    paths = attendance.app.openapi()["paths"]
+    assert all("/graph/" not in path for path in paths)

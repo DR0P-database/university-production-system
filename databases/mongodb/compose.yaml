@@ -17,6 +17,33 @@ services:
     networks:
       - services-network
 
+  mongodb-academic-init:
+    image: mongo:7
+    restart: "no"
+    environment:
+      MONGODB_ACADEMIC_DB: ${MONGODB_ACADEMIC_DB:-academic_content}
+      MONGODB_ACADEMIC_USER: ${MONGODB_ACADEMIC_USER:-academic_service}
+      MONGODB_ACADEMIC_PASSWORD: ${MONGODB_ACADEMIC_PASSWORD:-academic-mongo-local-password}
+    command:
+      - mongosh
+      - --quiet
+      - --host
+      - mongodb
+      - --username
+      - ${MONGODB_ROOT_USER}
+      - --password
+      - ${MONGODB_ROOT_PASSWORD}
+      - --authenticationDatabase
+      - admin
+      - /scripts/create-academic-user.js
+    volumes:
+      - ./init/create-academic-user.js:/scripts/create-academic-user.js:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - services-network
+
   mongo-express:
     image: mongo-express:1-20-alpine3.19
     restart: unless-stopped

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Literal, Self
 from uuid import UUID
 
@@ -25,3 +25,18 @@ class ScheduleCreate(BaseModel):
         if self.week_start_date.isoweekday() != 1:
             raise ValueError("week_start_date must be a Monday")
         return self
+
+
+class ScheduleResponse(ScheduleCreate):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class SchedulePage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ScheduleResponse]
+    limit: int
+    offset: int
+    total: int

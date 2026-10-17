@@ -219,9 +219,8 @@ ON DELETE CASCADE
 | `lecture_id` | `UUID` | `NOT NULL`, FK |
 | `content_type` | `VARCHAR(50)` | `NOT NULL` |
 | `title` | `VARCHAR(500)` | nullable |
-| `content_text` | `TEXT` | nullable |
 | `file_url` | `TEXT` | nullable |
-| `metadata` | `JSONB` | `NOT NULL`, `DEFAULT '{}'` |
+| `content_ref` | `TEXT` | nullable, ссылка на MongoDB-документ |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT now()` |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT now()` |
 
@@ -231,9 +230,8 @@ CHECK (content_type IN (
 ))
 
 CHECK (
-    content_text IS NOT NULL
+    content_ref IS NOT NULL
     OR file_url IS NOT NULL
-    OR metadata <> '{}'::jsonb
 )
 
 FOREIGN KEY (lecture_id)
@@ -244,7 +242,10 @@ CREATE INDEX ix_lecture_materials_lecture_id
 ON lecture_materials(lecture_id);
 ```
 
-`file_url` имеет тип `TEXT`, чтобы не вводить искусственное ограничение длины URL.
+`content_text` и `metadata` физически находятся в MongoDB, в коллекции
+`academic_content.lecture_material_contents`. MongoDB `_id` совпадает с UUID
+материала. `file_url` остаётся внешней ссылкой на бинарный объект; сами файлы
+текущий API не принимает и не хранит.
 
 ## `student_db`
 
