@@ -11,6 +11,11 @@ services:
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-5}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ISSUER: ${JWT_ISSUER:-university-gateway}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-university-api}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      JWT_CLOCK_SKEW_SECONDS: ${JWT_CLOCK_SKEW_SECONDS:-5}
+      AUTH_USERS_FILE: /app/config/dev-users.json
     ports:
       - "${GATEWAY_PORT:-8000}:8000"
     depends_on:

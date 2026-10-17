@@ -49,7 +49,30 @@ docker compose --profile tools run --rm verify-data
 Параметры объёма находятся в `.env.example`. Подробный порядок и критерии
 готовности описаны в `DATA_BOOTSTRAP_PLAN.md`.
 
-Пример запроса через Gateway с токеном существующего auth-слоя:
+## JWT-доступ к Gateway
+
+Gateway выдаёт короткоживущий JWT после проверки Argon2-хэша пароля:
+
+```bash
+JWT_TOKEN=$(curl -fsS \
+  -H "Content-Type: application/json" \
+  -d '{"username":"api-user","password":"api-password"}' \
+  http://localhost:8000/api/v1/auth/token \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+```
+
+Доступные только для development аккаунты находятся в
+`gateway/config/dev-users.json`:
+
+| Логин | Пароль |
+|---|---|
+| `api-user` | `api-password` |
+
+Ролей и разграничения прав нет: любой корректный access token открывает доступ
+ко всем API через Gateway. В production development-файл пользователей должен
+заменяться внешним auth provider или секретным volume.
+
+Пример авторизованного запроса:
 
 ```bash
 curl \
@@ -64,6 +87,3 @@ poetry run ruff check .
 poetry run pytest -q
 docker compose --profile tools config --quiet
 ```
-
-Существующая JWT-реализация относится к следующему этапу работ и в рамках
-пунктов 1.1–1.3 не изменялась.

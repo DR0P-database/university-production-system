@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sys
+from datetime import UTC, datetime, timedelta
+
 import httpx
+import jwt
 from fastapi.testclient import TestClient
 
 
@@ -49,10 +53,25 @@ class OpenAPIClient:
         return None
 
 
-def test_gateway_returns_structured_503_and_forwards_request_id(load_app, monkeypatch):
+class RecordingClient:
+    def __init__(self):
+        self.headers = None
+
+    async def request(self, method, url, **kwargs):
+        self.headers = kwargs["headers"]
+        return httpx.Response(
+            200,
+            request=httpx.Request(method, url),
+            json={"status": "forwarded"},
+        )
+
+    async def aclose(self):
+        return None
+
+
+def test_gateway_returns_structured_503_and_forwards_request_id(load_app):
     module = load_app("gateway")
-    monkeypatch.setattr(module, "authenticate", lambda request: {"sub": "test"})
-    monkeypatch.setattr(module, "authorize", lambda request, claims: None)
+    module.app.dependency_overrides[module.require_access_token] = lambda: None
     unavailable = UnavailableClient()
 
     with TestClient(module.app) as client:
@@ -84,3 +103,79 @@ def test_gateway_exposes_merged_service_openapi(load_app):
     assert operation["security"] == [{"BearerAuth": []}]
     assert operation["operationId"] == "academic_list_items"
     assert schema["components"]["securitySchemes"]["BearerAuth"]["scheme"] == "bearer"
+
+
+def test_token_allows_any_gateway_api_operation(load_app):
+    module = load_app("gateway")
+    upstream = RecordingClient()
+
+    with TestClient(module.app) as client:
+        module.app.state.client = upstream
+        login = client.post(
+            "/api/v1/auth/token",
+            json={"username": "api-user", "password": "api-password"},
+        )
+        token = login.json()["access_token"]
+        response = client.post(
+            "/api/v1/students/students",
+            headers={"Authorization": f"Bearer {token}"},
+            json={},
+        )
+
+    assert login.status_code == 200
+    assert login.json()["token_type"] == "bearer"
+    assert response.status_code == 200
+    assert "authorization" not in upstream.headers
+
+
+def test_missing_token_is_rejected(load_app):
+    module = load_app("gateway")
+
+    with TestClient(module.app) as client:
+        response = client.get("/api/v1/students/students")
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+def test_expired_token_is_rejected(load_app):
+    module = load_app("gateway")
+    auth = sys.modules["app.auth"]
+    now = datetime.now(UTC)
+    payload = {
+        "sub": "expired-user",
+        "type": "access",
+        "iss": auth.settings.jwt_issuer,
+        "aud": auth.settings.jwt_audience,
+        "iat": now - timedelta(hours=2),
+        "nbf": now - timedelta(hours=2),
+        "exp": now - timedelta(hours=1),
+        "jti": "expired-token-id",
+    }
+    token = jwt.encode(
+        payload,
+        auth.settings.jwt_secret.get_secret_value(),
+        algorithm=auth.settings.jwt_algorithm,
+    )
+
+    with TestClient(module.app) as client:
+        response = client.get(
+            "/api/v1/schedule", headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "TOKEN_EXPIRED"
+
+
+def test_invalid_credentials_are_rejected(load_app):
+    module = load_app("gateway")
+
+    with TestClient(module.app) as client:
+        response = client.post(
+            "/api/v1/auth/token",
+            json={"username": "api-user", "password": "wrong-password"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"

@@ -172,37 +172,14 @@ API Gateway
 - [x] Настроить timeout для upstream-сервисов.
 - [x] Возвращать `503`, если зависимый сервис недоступен.
 
-## 1.4. JWT и роли
+## 1.4. JWT-доступ к Gateway
 
-- [ ] Определить способ выдачи JWT.
-- [ ] Проверять подпись JWT на Gateway.
-- [ ] Проверять expiration.
-- [ ] Передавать identity пользователя дальше в сервисы.
-- [ ] Определить роли:
-
-```text
-admin
-teacher
-student
-```
-
-### Минимальная модель прав
-
-```text
-admin:
-- academic read/write
-- students read/write
-- schedule read/write
-
-teacher:
-- students read
-- schedule read
-- attendance read/write
-
-student:
-- schedule read
-- own attendance read
-```
+- [x] Определить способ выдачи JWT.
+- [x] Проверять подпись JWT на Gateway.
+- [x] Проверять expiration.
+- [x] Требовать валидный JWT для любого обращения к API через Gateway.
+- [x] Не вводить роли: корректный токен предоставляет одинаковый доступ ко всем
+  API Gateway.
 
 ### Архитектурное правило
 
@@ -244,8 +221,8 @@ University
 - [x] Нельзя поставить Attendance студенту из другой группы.
 - [x] Повторный Attendance не создаёт дубликат.
 - [x] Недоступный dependency-service даёт `503`.
-- [ ] Запрос без JWT отклоняется.
-- [ ] Запрос с неправильной ролью даёт `403`.
+- [x] Запрос без JWT отклоняется.
+- [x] Запрос с истёкшим или некорректным JWT отклоняется.
 - [x] Duplicate уникального значения даёт `409`.
 
 ## Definition of Done — ЛР1
@@ -702,8 +679,8 @@ v
 - [x] Добавить проверку `student.group_id == schedule.group_id`.
 - [x] Проверить отдельные Alembic migrations.
 - [x] Проверить права PostgreSQL users.
-- [ ] Реализовать JWT.
-- [ ] Реализовать роли.
+- [x] Реализовать JWT.
+- [x] Защитить API Gateway единым JWT dependency без ролевых проверок.
 - [x] Закрыть прямой внешний доступ к микросервисам.
 - [x] Проверить весь проект через end-to-end сценарий.
 - [ ] После этого фиксировать ЛР1 как завершённую и переходить к RabbitMQ.

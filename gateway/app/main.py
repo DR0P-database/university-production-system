@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import httpx
-from app.auth import authenticate, authorize
-from app.openapi import fetch_service_schemas, merge_openapi_schemas
-from app.request_id import REQUEST_ID_HEADER, get_request_id, request_id_middleware
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Security
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from app.auth import (
+    LoginRequest,
+    TokenResponse,
+    authenticate_account,
+    create_access_token,
+    require_access_token,
+)
+from app.openapi import fetch_service_schemas, merge_openapi_schemas
+from app.request_id import REQUEST_ID_HEADER, get_request_id, request_id_middleware
 
 SERVICE_PREFIXES = {
     "academic": os.getenv("ACADEMIC_SERVICE_URL", "http://academic-service:8000"),
@@ -20,7 +28,7 @@ SERVICE_PREFIXES = {
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     timeout = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5"))
     app.state.client = httpx.AsyncClient(timeout=timeout)
     app.state.merged_openapi = None
@@ -47,13 +55,24 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
         else {"code": "HTTP_ERROR", "message": str(exc.detail), "details": {}}
     )
     detail.setdefault("request_id", get_request_id())
-    return JSONResponse(status_code=exc.status_code, content={"error": detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": detail},
+        headers=exc.headers,
+    )
 
 
 @app.get("/health", tags=["system"], summary="Gateway health check")
 async def health() -> dict[str, str]:
     """Return the health status of the gateway."""
     return {"status": "ok"}
+
+
+@app.post("/api/v1/auth/token", response_model=TokenResponse, tags=["auth"])
+async def issue_token(payload: LoginRequest) -> TokenResponse:
+    """Authenticate a configured account and issue a short-lived access token."""
+    account = authenticate_account(payload.username, payload.password)
+    return create_access_token(account)
 
 
 @app.get("/openapi.json", include_in_schema=False)
@@ -98,12 +117,11 @@ async def redoc() -> HTMLResponse:
 @app.api_route(
     "/api/v1/{service}/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    dependencies=[Security(require_access_token)],
     include_in_schema=False,
 )
 async def proxy(service: str, path: str, request: Request) -> Response:
-    """Forward an API request to the selected internal service."""
-    claims = authenticate(request)
-    authorize(request, claims)
+    """Forward an authenticated API request to an internal service."""
     base_url = SERVICE_PREFIXES.get(service)
     if base_url is None:
         raise HTTPException(
@@ -123,7 +141,6 @@ async def proxy(service: str, path: str, request: Request) -> Response:
             content=await request.body(),
             headers={
                 "content-type": request.headers.get("content-type", "application/json"),
-                "authorization": request.headers.get("authorization", ""),
                 REQUEST_ID_HEADER: get_request_id(),
             },
         )

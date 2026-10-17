@@ -1,0 +1,6 @@
+[
+  {
+    "username": "api-user",
+    "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$kw/D7/I2O8CMeHmoId5Elw$YxxzvXDPPEJ+ELhzf7gBUQGl2egjxteycVD+QtMdKgI"
+  }
+]
