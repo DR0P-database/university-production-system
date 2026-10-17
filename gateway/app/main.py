@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager
 
 import httpx
 from app.auth import authenticate, authorize
+from app.openapi import fetch_service_schemas, merge_openapi_schemas
 from app.request_id import REQUEST_ID_HEADER, get_request_id, request_id_middleware
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
 
 SERVICE_PREFIXES = {
     "academic": os.getenv("ACADEMIC_SERVICE_URL", "http://academic-service:8000"),
@@ -21,11 +23,19 @@ SERVICE_PREFIXES = {
 async def lifespan(app: FastAPI):
     timeout = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5"))
     app.state.client = httpx.AsyncClient(timeout=timeout)
+    app.state.merged_openapi = None
     yield
     await app.state.client.aclose()
 
 
-app = FastAPI(title="University API Gateway", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="University API Gateway",
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
+)
 app.middleware("http")(request_id_middleware)
 
 
@@ -44,6 +54,45 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
 async def health() -> dict[str, str]:
     """Return the health status of the gateway."""
     return {"status": "ok"}
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_schema(request: Request) -> JSONResponse:
+    """Return one public contract assembled from all internal services."""
+    if request.app.state.merged_openapi is None:
+        try:
+            service_schemas = await fetch_service_schemas(
+                request.app.state.client, SERVICE_PREFIXES
+            )
+            request.app.state.merged_openapi = merge_openapi_schemas(
+                request.app.routes, service_schemas
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(
+                503,
+                {
+                    "code": "OPENAPI_UNAVAILABLE",
+                    "message": "Unable to assemble the API documentation",
+                    "details": {"reason": str(exc)},
+                },
+            ) from exc
+    return JSONResponse(request.app.state.merged_openapi)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui() -> HTMLResponse:
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="University API Gateway - Swagger UI",
+    )
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc() -> HTMLResponse:
+    return get_redoc_html(
+        openapi_url="/openapi.json",
+        title="University API Gateway - ReDoc",
+    )
 
 
 @app.api_route(
