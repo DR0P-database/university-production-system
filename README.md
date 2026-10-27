@@ -1,89 +1,67 @@
 # University Production System
 
-Микросервисный backend университетской системы на FastAPI с polyglot-хранением.
+Микросервисный backend университетской системы на FastAPI с PostgreSQL,
+MongoDB, Elasticsearch, Redis и Neo4j.
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — сервисы, модели данных, хранилища и
+  архитектурные правила.
+- [TODO.md](TODO.md) — что реализовано и план дальнейшего развития.
 
 ## Состав
 
-- `gateway` — единая внешняя точка входа на порту `8000`;
-- `academic-service` — структура университета и учебные материалы;
-- `student-service` — группы и студенты;
-- `schedule-service` — расписание;
-- `attendance-service` — посещаемость;
-- четыре логические PostgreSQL-базы с отдельными владельцами и Alembic;
-- MongoDB для полного текста и метаданных учебных материалов;
-- Elasticsearch для поисковой проекции лекций;
-- Redis для cache-aside поиска студента по номеру студенческого билета;
-- Neo4j для связной read-модели структуры, групп, студентов и расписания.
+| Компонент | Назначение |
+|---|---|
+| `gateway` | единая внешняя точка, JWT, proxy и объединённый OpenAPI |
+| `academic-service` | структура университета, курсы, лекции и материалы |
+| `student-service` | группы и студенты |
+| `schedule-service` | расписание |
+| `attendance-service` | посещаемость |
+| `tools/data-seeder` | идемпотентное заполнение и проверка демонстрационных данных |
 
-## Запуск
+Предметные сервисы доступны только во внутренних Docker networks. Снаружи API
+публикуется через Gateway: `http://localhost:8000`.
 
-Заполните `.env`, затем запустите систему:
+## Быстрый запуск
 
-```bash
-docker compose up --build
-```
-
-Внутренние сервисы доступны только внутри Docker network. Снаружи API
-публикует Gateway: `http://localhost:8000`.
-
-Gateway подключён только к `services-network`, PostgreSQL — только к внутренней
-`database-network`. Каждый микросервис подключён к обеим сетям и использует
-собственного владельца БД.
-
-## Объёмный тестовый набор данных
-
-После запуска миграций загрузите идемпотентный набор через внутренние REST API:
+Подготовьте development-конфигурацию:
 
 ```bash
-docker compose --profile tools run --rm --build seed-data
+cp .env.example .env
 ```
 
-По умолчанию генератор создаёт 2 университета, 34 группы, 1000 студентов,
-408 занятий и 4000 отметок посещаемости. В группе находится не больше 30
-студентов. Academic, student, schedule и attendance данные записываются только
-через API сервиса-владельца своей БД.
-
-Каждая лекция получает детерминированный Markdown-конспект и практическое
-задание с ключевыми словами. Повторный запуск обновляет устаревшие seed-материалы
-через API и не создаёт дубликаты.
-
-При создании материала academic-service оставляет структуру и ссылки в
-PostgreSQL, сохраняет `content_text` и `metadata_json` в MongoDB и обновляет
-поисковый документ лекции в Elasticsearch. Формат REST-запросов и ответов при
-этом не меняется.
-
-Обычные `GET /api/v1/academic/lectures` и `GET .../lectures/{id}` читают
-структурную карточку лекции из PostgreSQL. Запросы материалов сначала получают
-`id`, `lecture_id`, тип, название и ссылку из PostgreSQL, затем academic-service
-добавляет `content_text` и `metadata_json` из MongoDB. Elasticsearch не является
-источником ответа этих endpoints: в него отдельно собирается поисковый документ
-из карточки лекции и курса в PostgreSQL плюс текстов материалов в MongoDB.
-
-Создание и изменение студента обновляет Redis-кэш. Запрос по уникальному номеру
-`GET /api/v1/students/students/by-card/{student_card_number}` использует
-cache-aside и возвращает `X-Cache: HIT` или `MISS`; при недоступном Redis сервис
-продолжает читать PostgreSQL. TTL студента по умолчанию равен 24 часам и
-настраивается через `STUDENT_CACHE_TTL_SECONDS`.
-
-Neo4j хранит общую производную read-модель. Academic-service синхронизирует
-`University -> Institute -> Department -> Specialty`, student-service — группы,
-студентов и связи с кафедрой/специальностью, schedule-service — занятия группы.
-Каждый сервис пересобирает только принадлежащую ему часть графа из PostgreSQL и
-обновляет её после CRUD. Посещаемость в Neo4j не сохраняется.
-
-Повторный запуск безопасен и не создаёт дубликаты. Отдельная проверка уже
-загруженного набора:
+Замените как минимум `JWT_SECRET` и при необходимости локальные пароли. Затем:
 
 ```bash
-docker compose --profile tools run --rm --build verify-data
+docker compose up -d --build
+docker compose ps
 ```
 
-Параметры объёма находятся в `.env.example`. Подробный порядок и критерии
-готовности описаны в `DATA_BOOTSTRAP_PLAN.md`.
+После успешных healthcheck:
 
-## JWT-доступ к Gateway
+- Swagger UI: `http://localhost:8000/docs`;
+- ReDoc: `http://localhost:8000/redoc`;
+- Gateway health: `http://localhost:8000/health`.
 
-Gateway выдаёт короткоживущий JWT после проверки Argon2-хэша пароля:
+Полезные development-интерфейсы задаются переменными `.env`:
+
+| Интерфейс | URL по умолчанию |
+|---|---|
+| pgAdmin | `http://localhost:5050` |
+| Redis Commander | `http://localhost:8081` |
+| Mongo Express | `http://localhost:8082` |
+| Neo4j Browser | `http://localhost:7474` |
+| Kibana | `http://localhost:5601` |
+
+## JWT
+
+Development-аккаунт определён в `gateway/config/dev-users.json`:
+
+```text
+login:    api-user
+password: api-password
+```
+
+Получение токена:
 
 ```bash
 JWT_TOKEN=$(curl -fsS \
@@ -93,18 +71,11 @@ JWT_TOKEN=$(curl -fsS \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 ```
 
-Доступные только для development аккаунты находятся в
-`gateway/config/dev-users.json`:
+Ролей пока нет. Один корректный токен открывает все API Gateway.
 
-| Логин | Пароль |
-|---|---|
-| `api-user` | `api-password` |
+## Примеры запросов
 
-Ролей и разграничения прав нет: любой корректный access token открывает доступ
-ко всем API через Gateway. В production development-файл пользователей должен
-заменяться внешним auth provider или секретным volume.
-
-Пример авторизованного запроса:
+Список студентов:
 
 ```bash
 curl \
@@ -112,8 +83,8 @@ curl \
   "http://localhost:8000/api/v1/students/students?limit=30&offset=0"
 ```
 
-Поиск одного студента по номеру билета (повторите команду, чтобы увидеть
-`X-Cache: HIT`):
+Поиск студента по номеру билета. Повторный запрос должен вернуть
+`X-Cache: HIT`:
 
 ```bash
 curl -i \
@@ -121,41 +92,95 @@ curl -i \
   "http://localhost:8000/api/v1/students/students/by-card/SEED-000001"
 ```
 
-Проверка Neo4j-проекции и получение структуры конкретного университета:
+Поиск описаний и материалов лекций в Elasticsearch:
 
 ```bash
-curl \
+curl --get \
   -H "Authorization: Bearer $JWT_TOKEN" \
-  "http://localhost:8000/api/v1/academic/graph/stats"
-
-curl \
-  -H "Authorization: Bearer $JWT_TOKEN" \
-  "http://localhost:8000/api/v1/academic/graph/universities/<UNIVERSITY_UUID>"
+  --data-urlencode "q=нормализация" \
+  --data-urlencode "document_type=material" \
+  "http://localhost:8000/api/v1/academic/search/documents"
 ```
 
-Запросы, полностью выполняемые через Neo4j:
+Дополнительные фильтры: `lecture_id`, `content_type`, `limit`, `offset`.
+
+Neo4j-запрос студента с группой и университетом:
 
 ```bash
-curl -H "Authorization: Bearer $JWT_TOKEN" \
-  "http://localhost:8000/api/v1/students/graph/universities/<UNIVERSITY_UUID>/students"
-
-curl -H "Authorization: Bearer $JWT_TOKEN" \
+curl \
+  -H "Authorization: Bearer $JWT_TOKEN" \
   "http://localhost:8000/api/v1/students/graph/students/<STUDENT_UUID>"
+```
 
-curl -H "Authorization: Bearer $JWT_TOKEN" \
+Расписание студента из Neo4j:
+
+```bash
+curl \
+  -H "Authorization: Bearer $JWT_TOKEN" \
   "http://localhost:8000/api/v1/schedule/students/<STUDENT_UUID>"
 ```
 
-`verify-data` дополнительно проверяет Redis `HIT`. В чистой базе стандартный
-seed создаёт в Neo4j 1464 узла и 1496 связей. Если в PostgreSQL уже есть обычные
-данные, verifier не считает их ошибкой: он сравнивает Neo4j со всеми актуальными
-данными PostgreSQL, отдельно проверяет размер seed-набора и выполняет новые
-graph API по реальному студенту.
+Остальные endpoints и их схемы доступны в Swagger.
 
-## Проверки
+## Тестовые данные
+
+Seeder пишет данные только через API сервисов-владельцев:
+
+```bash
+docker compose --profile tools build seed-data verify-data
+docker compose --profile tools run --rm seed-data
+```
+
+Собирать tools достаточно один раз после изменения `seeder.py`. Не добавляйте
+`--build` к каждому `run`: иначе Compose может без необходимости пересобрать и
+пересоздать зависимые сервисы.
+
+Стандартный набор содержит:
+
+- 2 университета, 4 института, 8 кафедр и 8 специальностей;
+- 16 курсов, 96 лекций и 192 текстовых материала;
+- 1000 студентов в 34 группах, не больше 30 человек в группе;
+- 408 занятий и 4000 отметок посещаемости;
+- 288 поисковых документов Elasticsearch;
+- 1464 узла и 1496 связей Neo4j в чистой базе.
+
+Повторный запуск идемпотентен. Проверка уже загруженного набора:
+
+```bash
+docker compose --profile tools run --rm verify-data
+```
+
+Объёмы настраиваются через `SEED_*` в `.env`.
+
+## Локальные проверки
 
 ```bash
 poetry run ruff check .
 poetry run pytest -q
 docker compose --profile tools config --quiet
+```
+
+Остановка контейнеров:
+
+```bash
+docker compose down
+```
+
+Полное удаление development-данных выполняйте только осознанно:
+
+```bash
+docker compose down -v
+```
+
+## Структура репозитория
+
+```text
+gateway/                    API Gateway и JWT
+services/academic-service/  academic domain, MongoDB, Elasticsearch, Neo4j
+services/student-service/   students, Redis, Neo4j
+services/schedule-service/  schedule, Neo4j
+services/attendance-service attendance
+databases/                  Compose-конфигурация хранилищ
+tools/data-seeder/          seed и verify
+tests/                      contract и business-rule tests
 ```
