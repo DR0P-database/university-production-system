@@ -58,16 +58,14 @@ class StudentGraphStore:
         if self._schema_ready or not self.enabled():
             return
         try:
-            async with self.driver().session() as session:
-                for name, label in (
-                    ("graph_student_group_id", "StudentGroup"),
-                    ("graph_student_id", "Student"),
-                ):
-                    result = await session.run(
-                        f"CREATE CONSTRAINT {name} IF NOT EXISTS "
-                        f"FOR (node:{label}) REQUIRE node.id IS UNIQUE"
-                    )
-                    await result.consume()
+            for name, label in (
+                ("graph_student_group_id", "StudentGroup"),
+                ("graph_student_id", "Student"),
+            ):
+                await self._execute_write(
+                    f"CREATE CONSTRAINT {name} IF NOT EXISTS "
+                    f"FOR (node:{label}) REQUIRE node.id IS UNIQUE"
+                )
             self._schema_ready = True
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j student projection is unavailable") from exc
@@ -155,14 +153,12 @@ class StudentGraphStore:
         for student in students:
             await self.upsert_student(student)
         try:
-            async with self.driver().session() as session:
-                for label, rows in (("Student", students), ("StudentGroup", groups)):
-                    result = await session.run(
-                        f"MATCH (node:{label}) WHERE NOT node.id IN $ids "
-                        "DETACH DELETE node",
-                        ids=[str(row.id) for row in rows],
-                    )
-                    await result.consume()
+            for label, rows in (("Student", students), ("StudentGroup", groups)):
+                await self._write(
+                    f"MATCH (node:{label}) WHERE NOT node.id IN $ids "
+                    "DETACH DELETE node",
+                    ids=[str(row.id) for row in rows],
+                )
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j student projection is unavailable") from exc
 
@@ -249,11 +245,17 @@ class StudentGraphStore:
     async def _write(self, query: str, **parameters: Any) -> None:
         try:
             await self.ensure_schema()
-            async with self.driver().session() as session:
-                result = await session.run(query, **parameters)
-                await result.consume()
+            await self._execute_write(query, **parameters)
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j student projection is unavailable") from exc
+
+    async def _execute_write(self, query: str, **parameters: Any) -> None:
+        async def run(transaction: Any) -> None:
+            result = await transaction.run(query, **parameters)
+            await result.consume()
+
+        async with self.driver().session() as session:
+            await session.execute_write(run)
 
     async def close(self) -> None:
         if self._driver is not None:

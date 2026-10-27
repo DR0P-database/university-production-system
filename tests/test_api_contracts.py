@@ -31,6 +31,7 @@ def test_collection_endpoints_document_pagination(load_app):
             "/api/v1/academic/courses",
             "/api/v1/academic/lectures",
             "/api/v1/academic/materials",
+            "/api/v1/academic/search/documents",
             "/api/v1/academic/departments/{department_id}/specialties",
             "/api/v1/academic/lectures/{lecture_id}/materials",
         ),
@@ -150,17 +151,34 @@ def test_material_content_is_not_mapped_to_postgresql(load_app):
     assert "metadata_json" not in columns
 
 
-def test_lecture_search_projection_contains_only_search_fields(load_app):
+def test_document_search_projection_contains_only_document_fields(load_app):
     load_app("services/academic-service")
     search_store = importlib.import_module("app.search_store")
 
-    assert set(search_store.LECTURE_INDEX_PROPERTIES) == {
-        "title",
-        "annotation",
-        "content_text",
-        "lecture_type",
-        "course",
+    assert set(search_store.LECTURE_DOCUMENT_INDEX_PROPERTIES) == {
+        "document_type",
+        "lecture_id",
+        "material_id",
+        "content_type",
+        "content",
     }
+
+
+def test_document_search_has_typed_openapi_response(load_app):
+    schema = load_app("services/academic-service").app.openapi()
+    operation = schema["paths"]["/api/v1/academic/search/documents"]["get"]
+    parameters = {parameter["name"] for parameter in operation["parameters"]}
+    response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+    assert {
+        "q",
+        "document_type",
+        "lecture_id",
+        "content_type",
+        "limit",
+        "offset",
+    } <= parameters
+    assert response["$ref"].endswith("/SearchDocumentPage")
 
 
 def test_material_openapi_has_composed_response_schema(load_app):

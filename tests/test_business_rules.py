@@ -339,6 +339,42 @@ def test_graph_read_reports_unavailable_projection(load_app, monkeypatch):
     assert response.json()["error"]["code"] == "GRAPH_UNAVAILABLE"
 
 
+def test_document_search_returns_elasticsearch_projection(load_app, monkeypatch):
+    module = load_app("services/academic-service")
+    lecture_id = "00000000-0000-0000-0000-000000000106"
+    material_id = "00000000-0000-0000-0000-000000000107"
+
+    async def search(query, **options):
+        assert query == "нормализация"
+        assert options["document_type"] == "material"
+        return {
+            "items": [
+                {
+                    "document_id": f"material:{material_id}",
+                    "document_type": "material",
+                    "lecture_id": lecture_id,
+                    "material_id": material_id,
+                    "content_type": "text",
+                    "content": "Нормализация данных",
+                    "score": 1.5,
+                }
+            ],
+            "limit": options["limit"],
+            "offset": options["offset"],
+            "total": 1,
+        }
+
+    monkeypatch.setattr(module.search_store, "search", search)
+    with TestClient(module.app) as client:
+        response = client.get(
+            "/api/v1/academic/search/documents",
+            params={"q": "нормализация", "document_type": "material"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["material_id"] == material_id
+
+
 def test_graph_stats_are_returned_for_bootstrap_verification(load_app, monkeypatch):
     module = load_app("services/academic-service")
 

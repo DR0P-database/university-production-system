@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -43,12 +43,14 @@ from app.schemas import (
     RelationCreate,
     RelationResponse,
     RelationUpdate,
+    SearchDocumentPage,
     SpecialtyCreate,
     SpecialtyResponse,
     UniversityCreate,
     UniversityGraphResponse,
     UniversityResponse,
 )
+from app.search_store import SearchUnavailable, search_store
 
 router = APIRouter(prefix="/api/v1/academic")
 logger = logging.getLogger(__name__)
@@ -624,6 +626,45 @@ async def list_lecture_materials(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/search/documents",
+    tags=["search"],
+    summary="Search lecture descriptions and materials",
+    response_model=SearchDocumentPage,
+)
+async def search_documents(
+    q: str = Query(..., min_length=1, max_length=500),
+    document_type: Literal["description", "material"] | None = Query(None),
+    lecture_id: UUID | None = Query(None),
+    content_type: Literal[
+        "text", "presentation", "pdf", "video_link", "code_sample", "exercise"
+    ]
+    | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Search only the document projection stored in Elasticsearch."""
+    try:
+        return await search_store.search(
+            q,
+            document_type=document_type,
+            lecture_id=lecture_id,
+            content_type=content_type,
+            offset=offset,
+            limit=limit,
+        )
+    except SearchUnavailable as exc:
+        logger.warning("Elasticsearch document search failed", exc_info=True)
+        raise HTTPException(
+            503,
+            {
+                "code": "SEARCH_UNAVAILABLE",
+                "message": "Document search is unavailable",
+                "details": {},
+            },
+        ) from exc
 
 
 @router.get(

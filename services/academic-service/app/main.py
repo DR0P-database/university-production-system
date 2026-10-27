@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from pymongo.errors import PyMongoError
 from sqlalchemy.exc import IntegrityError
 
-from app.academic_graph import academic_graph
+from app.academic_graph import GraphUnavailable, academic_graph
 from app.api import router
 from app.content_store import content_store
 from app.db import SessionLocal
@@ -27,7 +27,13 @@ async def lifespan(_: FastAPI):
         await content_store.ensure_indexes()
         await search_store.ensure_index()
         async with SessionLocal() as session:
-            await academic_graph.rebuild(session)
+            try:
+                await academic_graph.rebuild(session)
+            except GraphUnavailable:
+                logger.warning(
+                    "Could not rebuild Neo4j academic projection during startup",
+                    exc_info=True,
+                )
             await sync_all_lecture_projections(session)
     yield
     await academic_graph.close()

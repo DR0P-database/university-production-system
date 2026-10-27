@@ -172,8 +172,9 @@ LESSON_TOPICS = (
         ),
         example=(
             "Для списка материалов лекции нужен индекс по lecture_id. Для поиска фразы "
-            "в конспектах создаётся отдельный документ Elasticsearch, содержащий название, "
-            "аннотацию и агрегированный текст, но не служебные поля PostgreSQL и MongoDB."
+            "в конспектах каждый материал и описание лекции создают отдельный документ "
+            "Elasticsearch с текстом и минимальными идентификаторами, но без полной "
+            "карточки лекции и метаданных MongoDB."
         ),
         exercise=(
             "Предложите индексы для фильтрации расписания по группе и диапазону дат, затем "
@@ -1147,6 +1148,28 @@ class DataVerifier:
                 )
             if "content_ref" in material:
                 raise RuntimeError("Internal content_ref leaked into the public API")
+
+        search_results = await self.api.request(
+            "GET",
+            "academic",
+            "/api/v1/academic/search/documents",
+            params={
+                "q": "нормализация",
+                "document_type": "material",
+                "limit": 5,
+            },
+        )
+        if search_results["total"] < 1:
+            raise RuntimeError("Elasticsearch material search returned no documents")
+        for document in search_results["items"]:
+            if (
+                document["document_type"] != "material"
+                or not document.get("material_id")
+                or not document.get("content")
+            ):
+                raise RuntimeError(
+                    "Elasticsearch returned an invalid material document"
+                )
 
         groups_by_id = {item["id"]: item for item in groups}
         courses_by_id = {item["id"]: item for item in courses}

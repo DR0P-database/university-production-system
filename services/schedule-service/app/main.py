@@ -32,7 +32,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI):
     if os.getenv("PROJECTIONS_BOOTSTRAP_ON_STARTUP", "false").lower() == "true":
         async with SessionLocal() as session:
-            await schedule_graph.rebuild(session)
+            try:
+                await schedule_graph.rebuild(session)
+            except GraphUnavailable:
+                logger.warning(
+                    "Could not rebuild Neo4j schedule projection during startup",
+                    exc_info=True,
+                )
     yield
     await schedule_graph.close()
 

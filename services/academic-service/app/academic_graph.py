@@ -81,23 +81,20 @@ class AcademicGraphStore:
         if self._schema_ready or not self.enabled():
             return
         try:
-            async with self.driver().session() as graph_session:
-                for constraint in (
-                    "student_projection_id",
-                    "lecture_projection_id",
-                    "academic_course_id",
-                    "academic_lecture_id",
-                ):
-                    legacy = await graph_session.run(
-                        f"DROP CONSTRAINT {constraint} IF EXISTS"
-                    )
-                    await legacy.consume()
-                for label in CONSTRAINT_LABELS:
-                    result = await graph_session.run(
-                        f"CREATE CONSTRAINT academic_{label.lower()}_id IF NOT EXISTS "
-                        f"FOR (node:{label}) REQUIRE node.id IS UNIQUE"
-                    )
-                    await result.consume()
+            for constraint in (
+                "student_projection_id",
+                "lecture_projection_id",
+                "academic_course_id",
+                "academic_lecture_id",
+            ):
+                await self._execute_write(
+                    f"DROP CONSTRAINT {constraint} IF EXISTS"
+                )
+            for label in CONSTRAINT_LABELS:
+                await self._execute_write(
+                    f"CREATE CONSTRAINT academic_{label.lower()}_id IF NOT EXISTS "
+                    f"FOR (node:{label}) REQUIRE node.id IS UNIQUE"
+                )
             self._schema_ready = True
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j academic projection is unavailable") from exc
@@ -178,17 +175,14 @@ class AcademicGraphStore:
         relations = list(await db_session.scalars(select(DepartmentSpecialty)))
         try:
             await self.ensure_schema()
-            async with self.driver().session() as graph_session:
-                legacy = await graph_session.run(
-                    "MATCH (node) WHERE node:Attendance OR node:Course OR node:Lecture "
-                    "DETACH DELETE node"
-                )
-                await legacy.consume()
-                old_relations = await graph_session.run(
-                    "MATCH (:Department)-[relation:OFFERS_SPECIALTY]->(:Specialty) "
-                    "DELETE relation"
-                )
-                await old_relations.consume()
+            await self._write(
+                "MATCH (node) WHERE node:Attendance OR node:Course OR node:Lecture "
+                "DETACH DELETE node"
+            )
+            await self._write(
+                "MATCH (:Department)-[relation:OFFERS_SPECIALTY]->(:Specialty) "
+                "DELETE relation"
+            )
             for _model, rows in entities.items():
                 for row in rows:
                     await self.upsert_entity(row)
@@ -198,15 +192,13 @@ class AcademicGraphStore:
                     relation.specialty_id,
                     relation.is_primary,
                 )
-            async with self.driver().session() as graph_session:
-                for model, rows in entities.items():
-                    label = ENTITY_CONFIG[model][0]
-                    result = await graph_session.run(
-                        f"MATCH (node:{label}) WHERE NOT node.id IN $ids "
-                        "DETACH DELETE node",
-                        ids=[str(row.id) for row in rows],
-                    )
-                    await result.consume()
+            for model, rows in entities.items():
+                label = ENTITY_CONFIG[model][0]
+                await self._write(
+                    f"MATCH (node:{label}) WHERE NOT node.id IN $ids "
+                    "DETACH DELETE node",
+                    ids=[str(row.id) for row in rows],
+                )
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j academic projection is unavailable") from exc
 
@@ -270,11 +262,17 @@ class AcademicGraphStore:
     async def _write(self, query: str, **parameters: Any) -> None:
         try:
             await self.ensure_schema()
-            async with self.driver().session() as graph_session:
-                result = await graph_session.run(query, **parameters)
-                await result.consume()
+            await self._execute_write(query, **parameters)
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j academic projection is unavailable") from exc
+
+    async def _execute_write(self, query: str, **parameters: Any) -> None:
+        async def run(transaction: Any) -> None:
+            result = await transaction.run(query, **parameters)
+            await result.consume()
+
+        async with self.driver().session() as graph_session:
+            await graph_session.execute_write(run)
 
     async def close(self) -> None:
         if self._driver is not None:

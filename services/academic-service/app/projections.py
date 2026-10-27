@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content_store import content_store
-from app.models import Lecture, LectureCourse, LectureMaterial
+from app.models import Lecture, LectureMaterial
 from app.search_store import search_store
 
 logger = logging.getLogger(__name__)
@@ -17,17 +17,11 @@ async def sync_lecture_projection(
     session: AsyncSession, lecture_id: UUID, *, strict: bool = False
 ) -> None:
     try:
-        result = await session.execute(
-            select(Lecture, LectureCourse.name)
-            .join(LectureCourse, Lecture.course_id == LectureCourse.id)
-            .where(Lecture.id == lecture_id)
-        )
-        row = result.one_or_none()
-        if row is None:
+        lecture = await session.get(Lecture, lecture_id)
+        if lecture is None:
             await search_store.delete(lecture_id)
             return
 
-        lecture, course_name = row
         materials = list(
             await session.scalars(
                 select(LectureMaterial)
@@ -36,21 +30,35 @@ async def sync_lecture_projection(
             )
         )
         contents = await content_store.get_many([material.id for material in materials])
-        content_text = "\n\n".join(
-            str(contents[str(material.id)]["content_text"])
-            for material in materials
-            if contents.get(str(material.id), {}).get("content_text")
-        )
-        await search_store.put(
-            lecture_id,
-            {
-                "title": lecture.title,
-                "annotation": lecture.annotation,
-                "content_text": content_text,
-                "lecture_type": lecture.lecture_type,
-                "course": course_name,
-            },
-        )
+        documents: list[tuple[str, dict[str, str]]] = []
+        if lecture.annotation and lecture.annotation.strip():
+            documents.append(
+                (
+                    f"description:{lecture.id}",
+                    {
+                        "document_type": "description",
+                        "lecture_id": str(lecture.id),
+                        "content": lecture.annotation,
+                    },
+                )
+            )
+        for material in materials:
+            content_text = contents.get(str(material.id), {}).get("content_text")
+            if not content_text or not str(content_text).strip():
+                continue
+            documents.append(
+                (
+                    f"material:{material.id}",
+                    {
+                        "document_type": "material",
+                        "lecture_id": str(lecture.id),
+                        "material_id": str(material.id),
+                        "content_type": material.content_type,
+                        "content": str(content_text),
+                    },
+                )
+            )
+        await search_store.replace_lecture_documents(lecture_id, documents)
     except Exception:
         logger.exception(
             "Could not synchronize lecture %s with Elasticsearch", lecture_id
@@ -71,3 +79,4 @@ async def sync_all_lecture_projections(session: AsyncSession) -> None:
     lecture_ids = list(await session.scalars(select(Lecture.id)))
     for lecture_id in lecture_ids:
         await sync_lecture_projection(session, lecture_id, strict=True)
+    await search_store.refresh()

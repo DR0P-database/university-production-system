@@ -69,12 +69,10 @@ class ScheduleGraphStore:
         if self._schema_ready or not self.enabled():
             return
         try:
-            async with self.driver().session() as session:
-                result = await session.run(
-                    "CREATE CONSTRAINT graph_schedule_id IF NOT EXISTS "
-                    "FOR (node:Schedule) REQUIRE node.id IS UNIQUE"
-                )
-                await result.consume()
+            await self._execute_write(
+                "CREATE CONSTRAINT graph_schedule_id IF NOT EXISTS "
+                "FOR (node:Schedule) REQUIRE node.id IS UNIQUE"
+            )
             self._schema_ready = True
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j schedule projection is unavailable") from exc
@@ -111,13 +109,11 @@ class ScheduleGraphStore:
         for schedule in schedules:
             await self.upsert(schedule)
         try:
-            async with self.driver().session() as session:
-                result = await session.run(
-                    "MATCH (schedule:Schedule) WHERE NOT schedule.id IN $ids "
-                    "DETACH DELETE schedule",
-                    ids=[str(schedule.id) for schedule in schedules],
-                )
-                await result.consume()
+            await self._write(
+                "MATCH (schedule:Schedule) WHERE NOT schedule.id IN $ids "
+                "DETACH DELETE schedule",
+                ids=[str(schedule.id) for schedule in schedules],
+            )
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j schedule projection is unavailable") from exc
 
@@ -185,11 +181,17 @@ class ScheduleGraphStore:
     async def _write(self, query: str, **parameters: Any) -> None:
         try:
             await self.ensure_schema()
-            async with self.driver().session() as session:
-                result = await session.run(query, **parameters)
-                await result.consume()
+            await self._execute_write(query, **parameters)
         except (DriverError, Neo4jError, OSError, ValueError) as exc:
             raise GraphUnavailable("Neo4j schedule projection is unavailable") from exc
+
+    async def _execute_write(self, query: str, **parameters: Any) -> None:
+        async def run(transaction: Any) -> None:
+            result = await transaction.run(query, **parameters)
+            await result.consume()
+
+        async with self.driver().session() as session:
+            await session.execute_write(run)
 
     async def close(self) -> None:
         if self._driver is not None:

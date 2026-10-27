@@ -183,3 +183,23 @@ class UniversityGraphPath(StrictModel):
 class UniversityGraphResponse(StrictModel):
     university_id: UUID
     paths: list[UniversityGraphPath]
+
+
+class SearchDocumentResponse(StrictModel):
+    document_id: str
+    document_type: Literal["description", "material"]
+    lecture_id: UUID
+    material_id: UUID | None = None
+    content_type: (
+        Literal["text", "presentation", "pdf", "video_link", "code_sample", "exercise"]
+        | None
+    ) = None
+    content: str
+    score: float | None = None
+
+
+class SearchDocumentPage(StrictModel):
+    items: list[SearchDocumentResponse]
+    limit: int
+    offset: int
+    total: int
