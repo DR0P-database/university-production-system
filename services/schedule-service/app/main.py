@@ -127,6 +127,8 @@ async def list_schedule(
     limit: int = Query(50, ge=1, le=100),
     group_id: UUID | None = Query(None),
     lecture_id: UUID | None = Query(None),
+    lecture_ids: list[UUID] | None = Query(None, max_length=100),
+    group_ids: list[UUID] | None = Query(None, max_length=100),
     status: str | None = Query(None),
     scheduled_date: date | None = Query(None),
     week_start_date: date | None = Query(None),
@@ -139,6 +141,10 @@ async def list_schedule(
             400, "INVALID_DATE_RANGE", "date_from must not be after date_to"
         )
     query = select(Schedule)
+    if lecture_ids is not None:
+        query = query.where(Schedule.lecture_id.in_(lecture_ids))
+    if group_ids is not None:
+        query = query.where(Schedule.group_id.in_(group_ids))
     explicit = {
         "group_id": group_id,
         "lecture_id": lecture_id,
@@ -159,7 +165,9 @@ async def list_schedule(
     if date_to is not None:
         query = query.where(Schedule.scheduled_date <= date_to)
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
-    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    rows = (
+        await session.scalars(query.order_by(Schedule.id).offset(offset).limit(limit))
+    ).all()
     return {
         "items": [dump(x) for x in rows],
         "limit": limit,

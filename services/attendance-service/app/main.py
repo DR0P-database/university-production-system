@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -92,9 +92,25 @@ async def list_attendance(
     schedule_id: UUID | None = Query(None),
     student_id: UUID | None = Query(None),
     week_start_date: date | None = Query(None),
+    schedule_ids: list[UUID] | None = Query(None, max_length=100),
+    student_ids: list[UUID] | None = Query(None, max_length=100),
+    week_from: date | None = None,
+    week_to: date | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     query = select(Attendance)
+    if week_from and week_to and week_from > week_to:
+        raise api_error(
+            400, "INVALID_DATE_RANGE", "week_from must not be after week_to"
+        )
+    if schedule_ids is not None:
+        query = query.where(Attendance.schedule_id.in_(schedule_ids))
+    if student_ids is not None:
+        query = query.where(Attendance.student_id.in_(student_ids))
+    if week_from is not None:
+        query = query.where(Attendance.week_start_date >= week_from)
+    if week_to is not None:
+        query = query.where(Attendance.week_start_date <= week_to)
     explicit = {
         "schedule_id": schedule_id,
         "student_id": student_id,
@@ -105,7 +121,13 @@ async def list_attendance(
         if value is not None:
             query = query.where(getattr(Attendance, key) == value)
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
-    rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+    rows = (
+        await session.scalars(
+            query.order_by(Attendance.id, Attendance.week_start_date)
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
     return {
         "items": [dump(x) for x in rows],
         "limit": limit,
@@ -153,6 +175,15 @@ async def upsert_row(
     return row
 
 
+def validate_schedule_week(schedule: dict[str, Any], week: date) -> None:
+    scheduled_date = date.fromisoformat(schedule["scheduled_date"])
+    expected = scheduled_date - timedelta(days=scheduled_date.weekday())
+    if week != expected:
+        raise api_error(
+            400, "ATTENDANCE_WEEK_MISMATCH", "Week must match the scheduled date"
+        )
+
+
 @app.put(
     "/api/v1/attendance/schedules/{schedule_id}/students/{student_id}",
     tags=["attendance"],
@@ -166,6 +197,7 @@ async def mark_attendance(
     """Create or update one attendance mark idempotently."""
     data = AttendanceMark.model_validate(payload).model_dump()
     schedule = await fetch_json("schedule", "/api/v1/schedule", schedule_id)
+    validate_schedule_week(schedule, data["week_start_date"])
     student = await fetch_json("student", "/api/v1/students/students", student_id)
     if schedule["group_id"] != student["group_id"]:
         raise api_error(
@@ -191,6 +223,7 @@ async def mark_schedule_attendance(
     validated_items = []
     for item in payload:
         data = AttendanceBatchMark.model_validate(item).model_dump()
+        validate_schedule_week(schedule, data["week_start_date"])
         student_id = data.pop("student_id")
         student = await fetch_json("student", "/api/v1/students/students", student_id)
         if schedule["group_id"] != student["group_id"]:

@@ -24,6 +24,7 @@ SERVICE_PREFIXES = {
     "students": os.getenv("STUDENT_SERVICE_URL", "http://student-service:8000"),
     "schedule": os.getenv("SCHEDULE_SERVICE_URL", "http://schedule-service:8000"),
     "attendance": os.getenv("ATTENDANCE_SERVICE_URL", "http://attendance-service:8000"),
+    "reports": os.getenv("REPORT_SERVICE_URL", "http://report-service:8000"),
 }
 
 
@@ -137,6 +138,9 @@ async def proxy(service: str, path: str, request: Request) -> Response:
         response = await request.app.state.client.request(
             request.method,
             upstream,
+            timeout=float(os.getenv("REPORT_TIMEOUT_SECONDS", "60"))
+            if service == "reports"
+            else float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5")),
             params=request.query_params,
             content=await request.body(),
             headers={

@@ -198,7 +198,7 @@ def test_attendance_batch_does_not_partially_write_on_group_mismatch(
 
     async def fetch(service, path, item_id):
         if service == "schedule":
-            return {"group_id": GROUP_ID}
+            return {"group_id": GROUP_ID, "scheduled_date": "2026-10-12"}
         group_id = GROUP_ID if str(item_id) == STUDENT_ID else OTHER_GROUP_ID
         return {"group_id": group_id}
 
@@ -239,7 +239,7 @@ def test_repeated_attendance_updates_existing_record(load_app, monkeypatch):
     override_session(module.app, module.get_session, session)
 
     async def fetch(service, path, item_id):
-        return {"group_id": GROUP_ID}
+        return {"group_id": GROUP_ID, "scheduled_date": "2026-10-12"}
 
     async def ensure(weeks):
         assert list(weeks) == [date(2026, 10, 12)]

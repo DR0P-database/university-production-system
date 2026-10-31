@@ -203,3 +203,8 @@ class SearchDocumentPage(StrictModel):
     limit: int
     offset: int
     total: int
+
+
+class LectureSearchPage(StrictModel):
+    items: list[UUID]
+    next_cursor: str | None = None

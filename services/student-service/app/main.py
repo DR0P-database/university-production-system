@@ -156,9 +156,13 @@ def register(path: str, model: Any, schema: Any, filters: tuple[str, ...] = ()):
         status: str | None = Query(None),
         email: str | None = Query(None),
         student_card_number: str | None = Query(None),
+        group_ids: list[UUID] | None = Query(None, max_length=100),
         session: AsyncSession = Depends(get_session),
     ):
         query = select(model)
+        if group_ids is not None:
+            column = Student.group_id if model is Student else StudentGroup.id
+            query = query.where(column.in_(group_ids))
         explicit = {
             "specialty_id": specialty_id,
             "department_id": department_id,
@@ -173,7 +177,9 @@ def register(path: str, model: Any, schema: Any, filters: tuple[str, ...] = ()):
             if value is not None:
                 query = query.where(getattr(model, key) == value)
         total = await session.scalar(select(func.count()).select_from(query.subquery()))
-        rows = (await session.scalars(query.offset(offset).limit(limit))).all()
+        rows = (
+            await session.scalars(query.order_by(model.id).offset(offset).limit(limit))
+        ).all()
         return {
             "items": [dump(x) for x in rows],
             "limit": limit,

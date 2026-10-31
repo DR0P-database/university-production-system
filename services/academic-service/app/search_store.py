@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from elasticsearch import Elasticsearch, NotFoundError
@@ -170,6 +170,42 @@ class LectureDocumentSearchStore:
             "limit": limit,
             "offset": offset,
             "total": total,
+        }
+
+    async def search_lecture_ids(
+        self,
+        query: str,
+        mode: Literal["phrase", "words"],
+        after: str | None,
+        limit: int,
+    ) -> dict[str, Any]:
+        """Page over unique lecture IDs without Elasticsearch's result-window limit."""
+        composite: dict[str, Any] = {
+            "size": limit,
+            "sources": [{"lecture_id": {"terms": {"field": "lecture_id"}}}],
+        }
+        if after is not None:
+            composite["after"] = {"lecture_id": after}
+        match = (
+            {"match_phrase": {"content": {"query": query}}}
+            if mode == "phrase"
+            else {"match": {"content": {"query": query, "operator": "and"}}}
+        )
+        try:
+            await self.ensure_index()
+            response = await asyncio.to_thread(
+                self.client.search,
+                index=self.index_name,
+                size=0,
+                query=match,
+                aggs={"lectures": {"composite": composite}},
+            )
+        except Exception as exc:
+            raise SearchUnavailable("Elasticsearch lecture search failed") from exc
+        aggregation = response["aggregations"]["lectures"]
+        return {
+            "items": [bucket["key"]["lecture_id"] for bucket in aggregation["buckets"]],
+            "next_cursor": aggregation.get("after_key", {}).get("lecture_id"),
         }
 
     async def close(self) -> None:

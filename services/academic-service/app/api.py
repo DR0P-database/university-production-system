@@ -36,6 +36,7 @@ from app.schemas import (
     InstituteResponse,
     LectureCreate,
     LectureResponse,
+    LectureSearchPage,
     MaterialCreate,
     MaterialResponse,
     MaterialUpdate,
@@ -161,6 +162,7 @@ def register_crud(
         department_id: UUID | None = Query(
             None, description="Filter specialties by department UUID"
         ),
+        ids: list[UUID] | None = Query(None, max_length=100),
     ):
         values = {key: request.query_params.get(key) for key in filters}
         if "department_id" in values:
@@ -175,6 +177,29 @@ def register_crud(
                         values[key] = int(value)
                 except (ValueError, AttributeError):
                     raise HTTPException(422, f"Invalid filter: {key}") from None
+        if ids is not None:
+            if model is not Lecture:
+                raise HTTPException(
+                    422, "The ids filter is supported only for lectures"
+                )
+            query = select(model).where(model.id.in_(ids))
+            for key, value in values.items():
+                if value is not None:
+                    query = query.where(getattr(model, key) == value)
+            total = await session.scalar(
+                select(func.count()).select_from(query.subquery())
+            )
+            rows = (
+                await session.scalars(
+                    query.order_by(model.id).offset(offset).limit(limit)
+                )
+            ).all()
+            return {
+                "items": [dump(row) for row in rows],
+                "limit": limit,
+                "offset": offset,
+                "total": total or 0,
+            }
         return await list_rows(model, session, values, offset, limit)
 
     @router.post(
@@ -626,6 +651,28 @@ async def list_lecture_materials(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/search/lectures",
+    tags=["search"],
+    response_model=LectureSearchPage,
+    summary="Find unique lecture IDs by phrase or all words",
+)
+async def search_lectures(
+    q: str = Query(..., min_length=1, max_length=500),
+    search_mode: Literal["phrase", "words"] = "words",
+    cursor: UUID | None = None,
+    limit: int = Query(100, ge=1, le=100),
+):
+    if not q.strip():
+        raise HTTPException(422, "Search term must not be blank")
+    try:
+        return await search_store.search_lecture_ids(
+            q, search_mode, str(cursor) if cursor else None, limit
+        )
+    except SearchUnavailable as exc:
+        raise HTTPException(503, "Elasticsearch lecture search is unavailable") from exc
 
 
 @router.get(

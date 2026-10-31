@@ -74,6 +74,20 @@ async def test_russian_inflections_and_phrase_positions_in_elasticsearch(load_ap
             limit=10,
         )
         assert result["total"] == 1
+        words = await store.search_lecture_ids("данные база", "words", None, 10)
+        assert words["items"] == [str(lecture_id)]
+        missing_word = await store.search_lecture_ids(
+            "база отсутствует", "words", None, 10
+        )
+        assert missing_word["items"] == []
+        phrase_result = await store.search_lecture_ids(
+            "база данных", "phrase", None, 10
+        )
+        assert phrase_result["items"] == [str(lecture_id)]
+        reversed_result = await store.search_lecture_ids(
+            "данные база", "phrase", None, 10
+        )
+        assert reversed_result["items"] == []
         phrase = store.client.search(
             index=store.index_name,
             query={"match_phrase": {"content": "база данных"}},

@@ -8,7 +8,9 @@ services:
       STUDENT_SERVICE_URL: http://student-service:8000
       SCHEDULE_SERVICE_URL: http://schedule-service:8000
       ATTENDANCE_SERVICE_URL: http://attendance-service:8000
+      REPORT_SERVICE_URL: http://report-service:8000
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-5}
+      REPORT_TIMEOUT_SECONDS: ${REPORT_TIMEOUT_SECONDS:-60}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ISSUER: ${JWT_ISSUER:-university-gateway}
@@ -26,6 +28,8 @@ services:
       schedule-service:
         condition: service_healthy
       attendance-service:
+        condition: service_healthy
+      report-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]

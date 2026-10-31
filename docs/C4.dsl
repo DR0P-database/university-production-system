@@ -9,6 +9,7 @@ workspace "University Production System" "C4-модель университет
             student = container "Student Service" "Управляет группами и студентами." "FastAPI"
             schedule = container "Schedule Service" "Управляет расписанием занятий." "FastAPI"
             attendance = container "Attendance Service" "Управляет отметками посещаемости." "FastAPI"
+            reports = container "Report Service — ЛР1" "Формирует рейтинг посещаемости лекций по термину и периоду." "FastAPI"
 
             academicDb = container "academic_db" "Учебная структура и ссылки на материалы." "PostgreSQL" "Database"
             studentDb = container "student_db" "Группы и студенты." "PostgreSQL" "Database"
@@ -25,6 +26,12 @@ workspace "University Production System" "C4-модель университет
         gateway -> student "Передаёт запросы" "HTTP/JSON"
         gateway -> schedule "Передаёт запросы" "HTTP/JSON"
         gateway -> attendance "Передаёт запросы" "HTTP/JSON"
+        gateway -> reports "Передаёт запрос отчёта после проверки JWT" "HTTP/JSON"
+
+        reports -> academic "Ищет лекции по термину или фразе" "HTTP/JSON"
+        reports -> student "Получает группы и студентов" "HTTP/JSON"
+        reports -> schedule "Получает проведённые занятия" "HTTP/JSON"
+        reports -> attendance "Получает отметки посещаемости" "HTTP/JSON"
 
         student -> academic "Проверяет кафедры и специальности" "HTTP/JSON"
         schedule -> academic "Проверяет лекции и курсы" "HTTP/JSON"
@@ -53,7 +60,7 @@ workspace "University Production System" "C4-модель университет
 
         container university "API-and-services" {
             title "C4: пользователь, API Gateway и сервисы"
-            include user gateway academic student schedule attendance
+            include user gateway reports academic student schedule attendance
             autoLayout lr
         }
 
