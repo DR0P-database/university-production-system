@@ -8,12 +8,29 @@ from uuid import UUID
 from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
 
+RUSSIAN_ANALYZER = "lecture_russian"
+INDEX_VERSION_SUFFIX = "_ru_v1"
 LECTURE_DOCUMENT_INDEX_PROPERTIES: dict[str, dict[str, str]] = {
     "document_type": {"type": "keyword"},
     "lecture_id": {"type": "keyword"},
     "material_id": {"type": "keyword"},
     "content_type": {"type": "keyword"},
-    "content": {"type": "text"},
+    "content": {"type": "text", "analyzer": RUSSIAN_ANALYZER},
+}
+
+LECTURE_INDEX_SETTINGS = {
+    "analysis": {
+        "analyzer": {
+            RUSSIAN_ANALYZER: {
+                "type": "custom",
+                "tokenizer": "standard",
+                "filter": ["lowercase", "lecture_russian_stemmer"],
+            }
+        },
+        "filter": {
+            "lecture_russian_stemmer": {"type": "stemmer", "language": "russian"}
+        },
+    }
 }
 
 
@@ -23,7 +40,8 @@ class SearchUnavailable(RuntimeError):
 
 class LectureDocumentSearchStore:
     def __init__(self) -> None:
-        self.index_name = os.getenv("ELASTICSEARCH_LECTURES_INDEX", "lectures")
+        base_index = os.getenv("ELASTICSEARCH_LECTURES_INDEX", "lectures")
+        self.index_name = f"{base_index}{INDEX_VERSION_SUFFIX}"
         self.client = Elasticsearch(
             os.getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
             request_timeout=float(os.getenv("ELASTICSEARCH_TIMEOUT_SECONDS", "3")),
@@ -42,20 +60,15 @@ class LectureDocumentSearchStore:
                 .get("mappings", {})
                 .get("properties", {})
             )
-            current_types = {
-                name: definition.get("type")
-                for name, definition in current_properties.items()
-            }
-            expected_types = {
-                name: definition["type"]
-                for name, definition in LECTURE_DOCUMENT_INDEX_PROPERTIES.items()
-            }
-            if current_types == expected_types:
+            if current_properties == LECTURE_DOCUMENT_INDEX_PROPERTIES:
                 return
-            await asyncio.to_thread(self.client.indices.delete, index=self.index_name)
+            raise SearchUnavailable(
+                f"Unexpected mapping for index {self.index_name}; rebuild is required"
+            )
         await asyncio.to_thread(
             self.client.indices.create,
             index=self.index_name,
+            settings=LECTURE_INDEX_SETTINGS,
             mappings={
                 "dynamic": "strict",
                 "properties": LECTURE_DOCUMENT_INDEX_PROPERTIES,
