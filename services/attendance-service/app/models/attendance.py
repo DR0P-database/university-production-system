@@ -22,7 +22,7 @@ from app.db import Base
 class Attendance(Base):
     __tablename__ = "attendance"
 
-    # week_start_date is part of the PK to support future partitioning by week.
+    # PostgreSQL requires the partition key in every unique constraint.
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
@@ -57,4 +57,5 @@ class Attendance(Base):
         Index("ix_attendance_schedule_id", "schedule_id"),
         Index("ix_attendance_student_id", "student_id"),
         Index("ix_attendance_week_start_date", "week_start_date"),
+        {"postgresql_partition_by": "RANGE (week_start_date)"},
     )

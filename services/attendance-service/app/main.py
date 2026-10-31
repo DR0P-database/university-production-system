@@ -18,6 +18,7 @@ from app.clients import fetch_json
 from app.db import get_session
 from app.errors import api_error
 from app.models import Attendance
+from app.partitions import ensure_partitions
 from app.request_id import get_request_id, request_id_middleware
 from app.schemas import AttendanceBatchMark, AttendanceMark
 
@@ -172,6 +173,7 @@ async def mark_attendance(
             "STUDENT_NOT_IN_SCHEDULE_GROUP",
             "Student does not belong to the schedule group",
         )
+    await ensure_partitions([data["week_start_date"]])
     row = await upsert_row(schedule_id, student_id, data, session)
     await session.commit()
     await session.refresh(row)
@@ -199,6 +201,7 @@ async def mark_schedule_attendance(
             )
         validated_items.append((student_id, data))
 
+    await ensure_partitions(data["week_start_date"] for _, data in validated_items)
     rows = [
         await upsert_row(schedule_id, student_id, data, session)
         for student_id, data in validated_items

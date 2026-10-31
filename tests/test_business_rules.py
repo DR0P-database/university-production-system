@@ -241,6 +241,10 @@ def test_repeated_attendance_updates_existing_record(load_app, monkeypatch):
     async def fetch(service, path, item_id):
         return {"group_id": GROUP_ID}
 
+    async def ensure(weeks):
+        assert list(weeks) == [date(2026, 10, 12)]
+
+    monkeypatch.setattr(module, "ensure_partitions", ensure)
     monkeypatch.setattr(module, "fetch_json", fetch)
     payload = {"week_start_date": "2026-10-12", "is_present": True}
     with TestClient(module.app) as client:

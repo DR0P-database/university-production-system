@@ -174,12 +174,34 @@ erDiagram
 
 Правила:
 
-- составной PK `(id, week_start_date)` подготовлен для будущего RANGE
-  partitioning;
+- RANGE-партиционирование по `week_start_date`, составной PK `(id, week_start_date)`;
 - уникально `(schedule_id, student_id, week_start_date)`;
 - `week_start_date` — понедельник;
 - индексы по schedule, student и week;
 - Attendance не хранится в Neo4j.
+
+### Недельные партиции посещаемости
+
+Миграция `20261031_partition_attendance` создаёт `attendance` с
+`PARTITION BY RANGE (week_start_date)`. Партиции `attendance_w_YYYYMMDD`
+охватывают интервал от понедельника включительно до следующего понедельника
+исключительно. Миграция создаёт партиции для всех существующих недель и текущей
+недели, переносит записи и восстанавливает PK, UNIQUE и индексы. Все действия
+выполняются одной транзакцией под ACCESS EXCLUSIVE lock; обновление следует
+проводить в окно обслуживания с остановленной записью. Нужен запас дискового
+пространства для копии таблицы и индексов. Downgrade возвращает обычную таблицу
+с сохранением данных.
+
+Перед одиночным или пакетным PUT сервис в отдельной короткой транзакции вызывает
+`ensure_attendance_partition(date)` для всех нужных недель. Advisory lock и
+повторная проверка защищают создание от гонок между workers. Отдельная транзакция
+не требует повышения блокировки после вставок внутри batch. Партиция может остаться
+пустой, если последующая запись не удалась. Прямые SQL-вставки для новых недель
+требуют предварительного вызова этой функции. DEFAULT-партиции нет.
+
+Фильтр `week_start_date` в списке и журнале, а также `date_from`/`date_to` в
+истории студента позволяют PostgreSQL исключать лишние партиции (partition
+pruning). Запросы без ограничения недели могут читать все партиции.
 
 ### Граница физических FK
 
@@ -1299,7 +1321,7 @@ ON schedule(group_id, scheduled_date);
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT now()` |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL`, `DEFAULT now()` |
 
-Чтобы подготовить таблицу к будущему партиционированию по `week_start_date`, используется составной первичный ключ:
+Для RANGE-партиционирования по `week_start_date` используется составной первичный ключ:
 
 ```sql
 PRIMARY KEY (id, week_start_date)
@@ -1365,7 +1387,7 @@ attendance_db:
 
 1. `TIMESTAMP` в логической схеме физически реализуется как `TIMESTAMPTZ`.
 2. Статусы реализуются через `VARCHAR + CHECK`, а не через PostgreSQL `ENUM`.
-3. Для `attendance` используется `PRIMARY KEY (id, week_start_date)`, чтобы не менять PK при последующем партиционировании по `week_start_date`.
+3. Для `attendance` используется `PRIMARY KEY (id, week_start_date)`, для партиционирования по `week_start_date`.
 4. Для `department_specialties` используется составной PK `(department_id, specialty_id)`; отдельный дублирующий `UNIQUE` не нужен.
 5. Для специальности добавлено правило: только одна кафедра может быть `is_primary = true`.
 
