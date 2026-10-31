@@ -1,0 +1,119 @@
+' https://www.plantuml.com/plantuml/uml/nLZTRXD75BwVfnZ1HQ-8wYGcFvOge2bIAueeRTMRI6ZhdJWkczrgTzseTmu6GWLjYeZwGocKzWMSmCBcn-OLPb-19-btpdhbzUmISu6nsYpUsNE-yt_cp8XpGMZvOMl3aIiNLwvTKZyevrf5XCtGKRGYNxTtPT99shglztMaUyazMLcM-XMj9BTrb6pXlxjInpAvXRMkxkbO7-au-KbtXQFMGXbwqcysraDfDtrL3vkUAuBhJVTxoxSsPB1ksTvcqst8DSi9LEwBhTQibXDUzDpmihMXv7c_QJd3xtZtlSsFFSVpvUcvQjLQgEO-VXsekXMe2rRzUiFtMguz85ohh2sirKi8FTzM_e1ejZAtE6_dYAv2RSjjE0MypVLcg4e9I_24dtsLf_GJ-FCekQTVib-xoGqTqRiyV-NJKz8AP2jGlcYnSY2lp7ouwkfVamxJzV2Cavlukus_TeQGt0DDB160BeK7ptr0xj072JdfOf-YnH8QLgWshH-7GcPPo6Eznxnx37atWwOSsDOHbdluzSkgcsnXkPrqz27-xT0lISAFKri04GFaQ23BgbksscZMXyBcJXO6S40_Juqb0rFJdh74Lx0anGt2bgtSS0WxVn8ibCPgiWM06CyqLQCKgBwkx9QZXaZLav60qGT6H6aEBO_fZRwaveQXSctBhIiXFf3w2SVe9GlVrZt0H5n0oGxpTVIpD1bOdqEoCoObimmXVmDwAzcHy0KlWgelyUZgGqc_sKkHFW02N8zovDT3KabtQwJ3Fd-u1S8Tu4062tkHlQDWUI6M0DiZRV5AsdP9Tabf0v4W-YG0QSYSV-ArhPypOVTr-u5-222ypkGp__Lk-nt-l-gkLAJ-BzbExaEJWMivrzc7iMIzNwOnP6tXtrNttIh1CRShydJeMsw0Je2Kh3bDLotd5YRgWrdu82jFtKL0pUhKNMxaLxmWRFZgooykJSO7irFqmPpKJ_DT0rLWj8ptueAvARfWNkf_YWtklPWzFqMpgsYnvTtulPXUdQBfPwL-PEwuWtquejOywCRS6DaPdtjkmrkvC1bFd9sY9nOu2JZl3sbWWCK7adUrv-bMoEP_ubX1sAm7olBhwvDnmi8KdR0ezSFav-HEoG35vbzLTZEOZDcBKpHxIUe7F5tTbCE4JswnoPULD__TP4nU6cEoe25UdZdpKJPhosLpLidNPysOqclois--4XahmJ3UCYtN9AWYcWrf7EGXx0PnWFCEadwFnXnXLqpXVo4Jdb5HP2SsIXPg5wy00B7wYAP8CI8qczs9__UyVhaZ0NixxtgHSHNDPvOIyyjD8jMogkxczSfc_w9QnTmV7GH4nccejZlKPJn6NfFiy51KfNZUI7P4Hdw2_7B6lCpX4QCebQTuQCrx01yeoayhI94XZAdDRpmszcXBgG6Hw7cyXo9baHgPkiLe-ErP0lm35CVip_kwbusfdJ5Jgm2laOHZ9zsH-Dfpfkpo41UdHG5M8y_6p9UZaRNdowpkbmPNHmBaPYwLp79cmEmg4Jv-ks23k9WwJ_6PJtTvvnZvOuJpBF7zcnqmtpnm252QmNiBDaFQ0h6PMpktZZwGEgbt2K-0r1JtDs0FE68CNietcY-BnFQGsY4d_3QxjDWEQkbiiK_reMDIFxdDHGe08sjuHnvUr0mrEHmhnN35qjkaFwKaxuLKFKkcHxADCbzwVNrGm37TiiIykRDKGL-i6PADua7WTb0DyTZcQjJHKjRXUdIPHKus1Osl6qCc-8IZ6YW3-QqNXjw6aAYYD9eqDHZtcpD8m3TTrwJa-tppSeTLvA1qK7szx1WoG_2x88gWUTf5-UAFDM4epeZyDGnGYxSkqGpt8Ew-HvG-0rsvMf7L8rim2tq4oXVS3DeG3uVahf_8yVmXQng4o6qSD7oDA0cOVSOwSgBWDGO91m3-E8PI0dvClIdEuO6xvFy1
+
+
+@startuml DFD_Context
+title DFD — контекстная диаграмма
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #355a75
+skinparam UsecaseBackgroundColor #f1f7fc
+skinparam UsecaseBorderColor #21384d
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor #21384d
+
+rectangle "Пользователь API" as user
+usecase "0\nОбрабатывать\nучебные данные" as system
+
+user --> system : Учётные данные; запросы; JWT
+system --> user : JWT; результаты; ошибки
+@enduml
+
+
+@startuml DFD_Level_1
+title DFD — уровень 1: процессы и хранилища
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #355a75
+skinparam UsecaseBackgroundColor #f1f7fc
+skinparam UsecaseBorderColor #21384d
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor #21384d
+
+rectangle "Пользователь API" as user
+usecase "1.0\nАутентифицировать\nи направлять запросы" as gateway
+usecase "2.0\nОбрабатывать учебную\nструктуру и материалы" as academic
+usecase "3.0\nОбрабатывать студентов\nи группы" as student
+usecase "4.0\nОбрабатывать\nрасписание" as schedule
+usecase "5.0\nОбрабатывать\nпосещаемость" as attendance
+
+' Прозрачные прямоугольники используются только как контейнеры текста;
+' верхняя и нижняя линии обозначают хранилища в нотации Йордана–Кода.
+rectangle "──────────────────────────\nD1 Учётные записи разработки\n──────────────────────────" as d1 #transparent;line:transparent
+rectangle "──────────────────────────\nD2 Учебная структура — PostgreSQL\n──────────────────────────" as d2 #transparent;line:transparent
+rectangle "──────────────────────────\nD3 Студенты и группы — PostgreSQL\n──────────────────────────" as d3 #transparent;line:transparent
+rectangle "──────────────────────────\nD4 Расписание — PostgreSQL\n──────────────────────────" as d4 #transparent;line:transparent
+rectangle "──────────────────────────\nD5 Посещаемость — PostgreSQL\n──────────────────────────" as d5 #transparent;line:transparent
+rectangle "──────────────────────────\nD6 Материалы и метаданные — MongoDB\n──────────────────────────" as d6 #transparent;line:transparent
+rectangle "──────────────────────────\nD7 Поисковый индекс — Elasticsearch\n──────────────────────────" as d7 #transparent;line:transparent
+rectangle "──────────────────────────\nD8 Кэш студентов — Redis\n──────────────────────────" as d8 #transparent;line:transparent
+rectangle "──────────────────────────\nD9 Граф данных — Neo4j\n──────────────────────────" as d9 #transparent;line:transparent
+
+user --> gateway : Учётные данные; запросы; JWT
+gateway --> user : JWT; результаты; ошибки
+d1 --> gateway : Логины и хэши паролей
+
+gateway --> academic : Запросы учебных данных
+academic --> gateway : Учебные данные; результаты поиска
+gateway --> student : Запросы студентов и групп
+student --> gateway : Данные студентов и групп
+gateway --> schedule : Запросы расписания
+schedule --> gateway : Данные расписания
+gateway --> attendance : Запросы и отметки посещаемости
+attendance --> gateway : Журнал; история; результат записи
+
+academic --> d2 : Изменённая учебная структура
+d2 --> academic : Учебная структура
+student --> d3 : Изменённые студенты и группы
+d3 --> student : Студенты и группы
+schedule --> d4 : Изменённое расписание
+d4 --> schedule : Расписание
+attendance --> d5 : Отметки посещаемости
+d5 --> attendance : Сохранённые отметки
+academic --> d6 : Тексты и метаданные
+d6 --> academic : Тексты и метаданные
+academic --> d7 : Поисковые документы
+d7 --> academic : Найденные документы
+student --> d8 : Карточки студентов; инвалидация
+d8 --> student : Кэшированные карточки студентов
+academic --> d9 : Учебная структура графа
+d9 --> academic : Граф учебной структуры
+student --> d9 : Группы и студенты графа
+d9 --> student : Связи студентов и групп
+schedule --> d9 : Занятия графа
+d9 --> schedule : Расписание студента
+
+legend bottom
+  Овал — процесс. Прямоугольник — внешняя сущность.
+  Две горизонтальные линии — хранилище. Стрелка — поток данных.
+  Межсервисные проверки показаны на отдельной диаграмме.
+endlegend
+@enduml
+
+
+@startuml DFD_Interservice
+title DFD — дополнение к уровню 1: межсервисные проверки
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor #355a75
+skinparam UsecaseBackgroundColor #f1f7fc
+skinparam UsecaseBorderColor #21384d
+
+usecase "2.0\nОбрабатывать учебную\nструктуру и материалы" as academic
+usecase "3.0\nОбрабатывать студентов\nи группы" as student
+usecase "4.0\nОбрабатывать\nрасписание" as schedule
+usecase "5.0\nОбрабатывать\nпосещаемость" as attendance
+
+student --> academic : ID кафедры и специальности
+academic --> student : Результат проверки
+schedule --> academic : ID лекции и курса
+academic --> schedule : Данные лекции и курса
+schedule --> student : ID группы
+student --> schedule : Данные группы
+attendance --> schedule : ID занятия
+schedule --> attendance : Занятие и его группа
+attendance --> student : ID студента
+student --> attendance : Студент и его группа
+@enduml
