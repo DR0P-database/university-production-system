@@ -28,6 +28,11 @@ SERVICE_PREFIXES = {
 }
 
 
+ROOM_REPORT_SERVICE_URL = os.getenv(
+    "ROOM_REPORT_SERVICE_URL", "http://room-report-service:8000"
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     timeout = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5"))
@@ -82,7 +87,8 @@ async def openapi_schema(request: Request) -> JSONResponse:
     if request.app.state.merged_openapi is None:
         try:
             service_schemas = await fetch_service_schemas(
-                request.app.state.client, SERVICE_PREFIXES
+                request.app.state.client,
+                {**SERVICE_PREFIXES, "reports_lab2": ROOM_REPORT_SERVICE_URL},
             )
             request.app.state.merged_openapi = merge_openapi_schemas(
                 request.app.routes, service_schemas
@@ -116,14 +122,24 @@ async def redoc() -> HTMLResponse:
 
 
 @app.api_route(
+    "/api/v1/{service}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    dependencies=[Security(require_access_token)],
+    include_in_schema=False,
+)
+@app.api_route(
     "/api/v1/{service}/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     dependencies=[Security(require_access_token)],
     include_in_schema=False,
 )
-async def proxy(service: str, path: str, request: Request) -> Response:
+async def proxy(service: str, request: Request, path: str = "") -> Response:
     """Forward an authenticated API request to an internal service."""
-    base_url = SERVICE_PREFIXES.get(service)
+    base_url = (
+        ROOM_REPORT_SERVICE_URL
+        if service == "reports" and path in {"capacity", "courses"}
+        else SERVICE_PREFIXES.get(service)
+    )
     if base_url is None:
         raise HTTPException(
             404,
@@ -133,7 +149,7 @@ async def proxy(service: str, path: str, request: Request) -> Response:
                 "details": {"service": service},
             },
         )
-    upstream = f"{base_url}/api/v1/{service}/{path}"
+    upstream = f"{base_url}/api/v1/{service}" + (f"/{path}" if path else "")
     try:
         response = await request.app.state.client.request(
             request.method,
@@ -141,7 +157,7 @@ async def proxy(service: str, path: str, request: Request) -> Response:
             timeout=float(os.getenv("REPORT_TIMEOUT_SECONDS", "60"))
             if service == "reports"
             else float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5")),
-            params=request.query_params,
+            params=request.query_params.multi_items(),
             content=await request.body(),
             headers={
                 "content-type": request.headers.get("content-type", "application/json"),

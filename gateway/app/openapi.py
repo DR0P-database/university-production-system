@@ -78,7 +78,9 @@ def merge_openapi_schemas(
         paths = _rewrite_references(schema.get("paths", {}), references)
 
         for path, path_item in paths.items():
-            if not path.startswith(f"/api/v1/{service}"):
+            if not path.startswith(
+                f"/api/v1/{'reports' if service == 'reports_lab2' else service}/"
+            ):
                 continue
             if path in merged["paths"]:
                 raise ValueError(f"Duplicate OpenAPI path: {path}")

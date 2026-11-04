@@ -148,35 +148,45 @@ def register_crud(
     response_schema: Any,
     filters: tuple[str, ...] = (),
 ) -> None:
-    @router.get(
-        f"/{path}",
-        tags=[tag],
-        summary=f"List {path}",
-        response_model=Page[response_schema],
-    )
     async def list_items(
         request: Request,
         session: AsyncSession = Depends(get_session),
         offset: int = Query(0, ge=0),
         limit: int = Query(50, ge=1, le=100),
         department_id: UUID | None = Query(
-            None, description="Filter specialties by department UUID"
+            None,
+            description="Filter specialties by department UUID",
+            include_in_schema="department_id" in filters,
         ),
-        ids: list[UUID] | None = Query(None, max_length=100),
+        ids: list[UUID] | None = Query(
+            None, max_length=100, include_in_schema=model is Lecture
+        ),
+        university_id: UUID | None = Query(
+            None, include_in_schema="university_id" in filters
+        ),
+        institute_id: UUID | None = Query(
+            None, include_in_schema="institute_id" in filters
+        ),
+        degree_level: Literal["bachelor", "master", "specialist"] | None = Query(
+            None, include_in_schema="degree_level" in filters
+        ),
+        code: str | None = Query(None, include_in_schema="code" in filters),
+        course_id: UUID | None = Query(None, include_in_schema="course_id" in filters),
+        lecture_type: Literal["lecture", "practice", "lab"] | None = Query(
+            None, include_in_schema="lecture_type" in filters
+        ),
     ):
-        values = {key: request.query_params.get(key) for key in filters}
+        explicit = {
+            "university_id": university_id,
+            "institute_id": institute_id,
+            "degree_level": degree_level,
+            "code": code,
+            "course_id": course_id,
+            "lecture_type": lecture_type,
+        }
+        values = {key: explicit.get(key) for key in filters}
         if "department_id" in values:
             values["department_id"] = department_id
-        for key, value in values.items():
-            if value is not None:
-                try:
-                    column = getattr(model, key)
-                    if column.type.python_type.__name__ == "UUID":
-                        values[key] = UUID(value)
-                    elif column.type.python_type is int:
-                        values[key] = int(value)
-                except (ValueError, AttributeError):
-                    raise HTTPException(422, f"Invalid filter: {key}") from None
         if ids is not None:
             if model is not Lecture:
                 raise HTTPException(
@@ -201,6 +211,16 @@ def register_crud(
                 "total": total or 0,
             }
         return await list_rows(model, session, values, offset, limit)
+
+    if model is not LectureCourse:
+        router.add_api_route(
+            f"/{path}",
+            list_items,
+            methods=["GET"],
+            tags=[tag],
+            summary=f"List {path}",
+            response_model=Page[response_schema],
+        )
 
     @router.post(
         f"/{path}",
@@ -762,3 +782,46 @@ async def university_graph(university_id: UUID):
             },
         )
     return {"university_id": university_id, "paths": paths}
+
+
+@router.get("/courses", response_model=Page[CourseResponse], tags=["courses"])
+async def list_courses(
+    session: AsyncSession = Depends(get_session),
+    semester: int | None = Query(
+        None, ge=1, le=12, description="Номер семестра по учебному плану (1–12)"
+    ),
+    study_year: int | None = Query(
+        None,
+        ge=1,
+        le=6,
+        description="Год обучения: 1 — семестры 1 и 2, 2 — семестры 3 и 4",
+    ),
+    specialty_id: UUID | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    if semester and study_year and (semester + 1) // 2 != study_year:
+        raise HTTPException(422, "Semester does not belong to study_year")
+    query = select(LectureCourse)
+    if specialty_id:
+        query = query.where(LectureCourse.specialty_id == specialty_id)
+    if semester:
+        query = query.where(LectureCourse.semester == semester)
+    if study_year:
+        query = query.where(
+            LectureCourse.semester.in_([study_year * 2 - 1, study_year * 2])
+        )
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = (
+        await session.scalars(
+            query.order_by(LectureCourse.name, LectureCourse.id)
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    return {
+        "items": [dump(row) for row in rows],
+        "total": total or 0,
+        "limit": limit,
+        "offset": offset,
+    }

@@ -117,3 +117,33 @@ schedule --> attendance : Занятие и его группа
 attendance --> student : ID студента
 student --> attendance : Студент и его группа
 @enduml
+
+@startuml DFD_Lab2
+title DFD — ЛР2: необходимая вместимость аудитории
+left to right direction
+rectangle "Пользователь" as user
+usecase "1.0 Проверить JWT
+и направить запрос" as gateway
+usecase "7.0 Рассчитать
+вместимость аудитории" as report
+usecase "2.0 Получить курс
+и требования занятий" as academic
+usecase "3.0 Получить группы
+и активных студентов" as students
+rectangle "──────────────────
+D2 Учебная структура PostgreSQL
+──────────────────" as db1 #transparent;line:transparent
+rectangle "──────────────────
+D3 Группы и студенты PostgreSQL
+──────────────────" as db2 #transparent;line:transparent
+user --> gateway : JWT; курс; семестр; год обучения; учебный год
+gateway --> report : Параметры отчёта
+report --> academic : ID курса
+academic --> report : Полный курс; занятия; требования
+report --> students : Специальность; год набора; статус
+students --> report : Группы и студенты
+db1 --> academic : Учебные данные
+db2 --> students : Состав групп
+report --> gateway : Курс; занятия; число слушателей; места
+gateway --> user : Отчёт; ошибки
+@enduml

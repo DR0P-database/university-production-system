@@ -226,3 +226,21 @@ def test_neo4j_projection_ownership_is_split_by_domain(load_app):
     attendance = load_app("services/attendance-service")
     paths = attendance.app.openapi()["paths"]
     assert all("/graph/" not in path for path in paths)
+
+
+def test_academic_list_filters_are_declared(load_app):
+    module = load_app("services/academic-service")
+    paths = module.app.openapi()["paths"]
+    expected = {
+        "institutes": {"university_id"},
+        "departments": {"institute_id"},
+        "specialties": {"degree_level", "code", "department_id"},
+        "lectures": {"course_id", "lecture_type", "ids"},
+        "courses": {"semester", "study_year", "specialty_id"},
+    }
+    for resource, filters in expected.items():
+        parameters = paths[f"/api/v1/academic/{resource}"]["get"]["parameters"]
+        names = {parameter["name"] for parameter in parameters}
+        assert filters <= names
+    institute_parameters = paths["/api/v1/academic/institutes"]["get"]["parameters"]
+    assert "lecture_type" not in {p["name"] for p in institute_parameters}
