@@ -153,7 +153,7 @@ query = [
     ("study_year", 1),
     ("academic_year", 2026),
 ]
-path = "/api/v1/reports/capacity"
+path = "/api/v1/reports/classroom-capacity"
 assert get(path, query, False)[0] == 401
 status, report = get(path, query)
 assert status == 200, report

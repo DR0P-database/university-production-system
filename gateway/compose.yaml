@@ -8,6 +8,7 @@ services:
       STUDENT_SERVICE_URL: http://student-service:8000
       SCHEDULE_SERVICE_URL: http://schedule-service:8000
       ATTENDANCE_SERVICE_URL: http://attendance-service:8000
+      GROUP_HOURS_REPORT_SERVICE_URL: http://group-hours-report-service:8000
       ROOM_REPORT_SERVICE_URL: http://room-report-service:8000
       REPORT_SERVICE_URL: http://report-service:8000
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-5}
@@ -29,6 +30,8 @@ services:
       schedule-service:
         condition: service_healthy
       attendance-service:
+        condition: service_healthy
+      group-hours-report-service:
         condition: service_healthy
       room-report-service:
         condition: service_healthy

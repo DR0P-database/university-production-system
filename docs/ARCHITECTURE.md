@@ -85,7 +85,7 @@ service A -> SQL -> database B
 
 ### Отчёт ЛР1
 
-`GET /api/v1/reports/attendance/lowest` принимает `term`, `date_from`,
+`GET /api/v1/reports/lowest-attendance` принимает `term`, `date_from`,
 `date_to`, `search_mode` (`words` или `phrase`), а также необязательные UUID
 кафедры, специальности, курса и группы. Report-service получает данные только
 через API сервисов-владельцев. Поиск в Elasticsearch возвращает уникальные ID
@@ -1581,7 +1581,7 @@ Tools пересобираются после изменения `seeder.py`. Ф
 ## ЛР2: вместимость аудитории
 
 `room-report-service` — отдельный HTTP-контейнер без БД, доступный через JWT
-Gateway по `/api/v1/reports/capacity`. Получает курс и занятия из academic,
+Gateway по `/api/v1/reports/classroom-capacity`. Получает курс и занятия из academic,
 группы по специальности и году набора и активных студентов из student.
 Обрабатывает все страницы и пакетирует ID групп по 100. Год набора равен
 `academic_year - study_year + 1`; сквозной семестр должен соответствовать году

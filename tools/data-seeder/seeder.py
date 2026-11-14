@@ -520,6 +520,27 @@ async def ensure(
     return created
 
 
+SPECIAL_DISCIPLINE_TAG = "специальная-дисциплина"
+
+
+def lecture_tags(order_number: int) -> list[str]:
+    # Two special lectures per course; other lessons exercise report exclusion.
+    return [SPECIAL_DISCIPLINE_TAG] if order_number in (1, 2) else ["общая-дисциплина"]
+
+
+async def sync_lecture_tags(api: ServiceApi, lecture: JsonObject) -> JsonObject:
+    desired = lecture_tags(int(lecture["order_number"]))
+    tags = list(dict.fromkeys([*lecture.get("tags", []), *desired]))
+    if tags == lecture.get("tags", []):
+        return lecture
+    return await api.request(
+        "PATCH",
+        "academic",
+        f"/api/v1/academic/lectures/{lecture['id']}",
+        json={"tags": tags},
+    )
+
+
 async def sync_material(
     api: ServiceApi,
     cache: dict[int, JsonObject],
@@ -777,6 +798,7 @@ class DataSeeder:
                         "course_id": course["id"],
                         "title": f"{course_name}, занятие {order_number}",
                         "annotation": "Автоматически сгенерированная лекция",
+                        "tags": lecture_tags(order_number),
                         "lecture_type": (
                             "lecture" if lecture_index < 3 else "practice"
                         ),
@@ -785,6 +807,7 @@ class DataSeeder:
                         "requirements": None,
                     },
                 )
+                lecture = await sync_lecture_tags(self.api, lecture)
                 lecture_ids.append(lecture["id"])
                 await self.seed_materials(lecture)
         self.lecture_ids_by_specialty[specialty["id"]] = lecture_ids

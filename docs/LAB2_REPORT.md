@@ -20,7 +20,7 @@ PostgreSQL подходит для этого запроса: нужны точ�
 
 Запускаю `docker compose up -d --build`. Для ЛР2 предусмотрен отдельный контейнер `room-report-service`, который доступен только во внутренней сети. Получаю токен через `POST /api/v1/auth/token` с development-учётной записью. Ответ — HTTP 200, тип токена bearer. Сам токен не публикую.
 
-Затем вызываю `/api/v1/reports/capacity` без JWT. Получаю HTTP 401. После этого во всех запросах передаю `Authorization: Bearer <токен>`.
+Затем вызываю `/api/v1/reports/classroom-capacity` без JWT. Получаю HTTP 401. После этого во всех запросах передаю `Authorization: Bearer <токен>`.
 
 ## Шаг 2. Подготавливаю воспроизводимый пример
 
@@ -31,7 +31,7 @@ PostgreSQL подходит для этого запроса: нужны точ�
 ## Шаг 3. Задаю входные параметры
 
 ```text
-GET /api/v1/reports/capacity
+GET /api/v1/reports/classroom-capacity
 course_id=beb18b6e-92a5-48d1-8ad8-e86a56731d23
 semester=1
 study_year=1

@@ -129,3 +129,45 @@ async def test_existing_seed_material_is_updated_instead_of_duplicated():
         "academic",
         f"/api/v1/academic/materials/{existing['id']}",
     )
+
+
+async def test_seed_lecture_tags_update_existing_without_losing_fields(load_app):
+    lecture = dict(
+        id="lecture",
+        course_id="course",
+        title="Existing title",
+        annotation="Existing annotation",
+        lecture_type="lecture",
+        order_number=1,
+        duration_minutes=90,
+        requirements="Projector",
+        tags=["custom"],
+    )
+
+    class FakeApi:
+        def __init__(self):
+            self.calls = []
+
+        async def request(self, method, service, path, *, json):
+            self.calls.append((method, service, path, json))
+            return {**lecture, **json}
+
+    api = FakeApi()
+    updated = await seeder.sync_lecture_tags(api, lecture)
+    assert updated["tags"] == ["custom", seeder.SPECIAL_DISCIPLINE_TAG]
+    assert updated["title"] == lecture["title"]
+    assert updated["requirements"] == "Projector"
+    assert api.calls[0][:3] == (
+        "PATCH",
+        "academic",
+        "/api/v1/academic/lectures/lecture",
+    )
+    academic = load_app("services/academic-service")
+    operations = academic.app.openapi()["paths"]["/api/v1/academic/lectures/{item_id}"]
+    assert api.calls[0][0].lower() in operations
+    assert api.calls[0][3] == {"tags": ["custom", seeder.SPECIAL_DISCIPLINE_TAG]}
+    assert await seeder.sync_lecture_tags(api, updated) == updated
+    assert len(api.calls) == 1
+    assert seeder.lecture_tags(2) == [seeder.SPECIAL_DISCIPLINE_TAG]
+    assert seeder.SPECIAL_DISCIPLINE_TAG not in seeder.lecture_tags(3)
+    assert seeder.SPECIAL_DISCIPLINE_TAG not in seeder.lecture_tags(4)

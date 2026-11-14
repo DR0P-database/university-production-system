@@ -75,7 +75,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
 
 
-app = FastAPI(title="Laboratory 1 Reports", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Laboratory 1 Reports",
+    version="1.0.0",
+    openapi_tags=[
+        {
+            "name": "Лабораторная 1",
+            "description": "Посещаемость лекций: десять студентов с минимальным процентом посещений по заданному термину и периоду.",
+        }
+    ],
+    lifespan=lifespan,
+)
 
 
 @app.middleware("http")
@@ -195,9 +205,18 @@ async def find_lecture_ids(request: Request, term: str, mode: str) -> list[str]:
 
 
 @app.get(
-    "/api/v1/reports/attendance/lowest",
+    "/api/v1/reports/lowest-attendance",
     response_model=AttendanceReport,
-    tags=["reports"],
+    tags=["Лабораторная 1"],
+    summary="10 студентов с наименьшей посещаемостью лекций",
+    description=(
+        "Находит лекции по термину или фразе в аннотациях и материалах. "
+        "Для завершённых занятий за указанный период рассчитывает посещаемость "
+        "и возвращает до десяти студентов с минимальным процентом. "
+        "В ответе — полные карточки студента и группы, количество занятий, "
+        "посещений и процент. Отсутствие отметки считается пропуском. "
+        "Можно ограничить выборку кафедрой, специальностью, группой и предметом (course_id)."
+    ),
 )
 async def lowest_attendance(
     request: Request,

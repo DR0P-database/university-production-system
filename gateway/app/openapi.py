@@ -79,7 +79,7 @@ def merge_openapi_schemas(
 
         for path, path_item in paths.items():
             if not path.startswith(
-                f"/api/v1/{'reports' if service == 'reports_lab2' else service}/"
+                f"/api/v1/{'reports' if service in {'reports_lab2', 'reports_lab3'} else service}/"
             ):
                 continue
             if path in merged["paths"]:

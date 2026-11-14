@@ -43,7 +43,7 @@ with urlopen(request) as response:
     token = credentials['access_token']
     trace.append({'method': 'POST', 'url': BASE + '/api/v1/auth/token', 'status': response.status, 'response': {**credentials, 'access_token': '<скрыт>'}})
 query = [('term', 'нормализация'), ('search_mode', 'words'), ('date_from', '2026-09-01'), ('date_to', '2026-10-31')]
-assert get('/api/v1/reports/attendance/lowest', query, False)[0] == 401
+assert get('/api/v1/reports/lowest-attendance', query, False)[0] == 401
 ids = set()
 cursor = None
 while True:
@@ -72,14 +72,14 @@ for student in students:
         count = sum((student['id'], s['id']) in present for s in lessons)
         ranked.append((Fraction(count, len(lessons)), student['id'], count, len(lessons), student))
 ranked.sort(key=lambda r: (r[0], r[1]))
-status, report = get('/api/v1/reports/attendance/lowest', query)
+status, report = get('/api/v1/reports/lowest-attendance', query)
 assert status == 200
 expected = [(r[1], r[2], r[3], round(float(100*r[0]), 2)) for r in ranked[:10]]
 actual = [(r['student']['id'], r['attended_count'], r['lecture_count'], r['attendance_percent']) for r in report['items']]
 assert actual == expected, (actual, expected)
-assert get('/api/v1/reports/attendance/lowest', [(k, 'несуществующийтерминлабораторная' if k == 'term' else v) for k, v in query])[1]['items'] == []
-assert get('/api/v1/reports/attendance/lowest', [('term', 'нормализация'), ('date_from', '2026-11-01'), ('date_to', '2026-09-01')])[0] == 422
-get('/api/v1/reports/attendance/lowest', [(k, 'phrase' if k == 'search_mode' else v) for k, v in query])
+assert get('/api/v1/reports/lowest-attendance', [(k, 'несуществующийтерминлабораторная' if k == 'term' else v) for k, v in query])[1]['items'] == []
+assert get('/api/v1/reports/lowest-attendance', [('term', 'нормализация'), ('date_from', '2026-11-01'), ('date_to', '2026-09-01')])[0] == 422
+get('/api/v1/reports/lowest-attendance', [(k, 'phrase' if k == 'search_mode' else v) for k, v in query])
 evidence = {'captured_at': datetime.now(UTC).isoformat(), 'counts': {'search_lecture_ids': len(ids), 'lectures': len(lectures), 'schedules': len(schedules), 'groups': len(groups), 'students': len(students), 'attendance': len(attendance), 'ranked': len(ranked)}, 'expected_top10': expected, 'report': report, 'requests': trace}
 (OUT / 'evidence.json').write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps(evidence['counts'], ensure_ascii=False))

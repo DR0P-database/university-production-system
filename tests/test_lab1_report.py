@@ -125,7 +125,7 @@ def test_report_ranks_all_students_before_limit_and_counts_missing_as_absent(loa
     with TestClient(module.app) as client:
         module.app.state.client = dependency
         response = client.get(
-            "/api/v1/reports/attendance/lowest",
+            "/api/v1/reports/lowest-attendance",
             params=report_query(),
             headers={"X-Request-ID": "example"},
         )
@@ -157,7 +157,7 @@ def test_report_percentage_phrase_filter_and_dependency_failure(load_app):
     with TestClient(module.app) as client:
         module.app.state.client = dependency
         response = client.get(
-            "/api/v1/reports/attendance/lowest",
+            "/api/v1/reports/lowest-attendance",
             params=report_query(search_mode="phrase"),
         )
         assert response.status_code == 200
@@ -165,13 +165,13 @@ def test_report_percentage_phrase_filter_and_dependency_failure(load_app):
         module.app.state.client = ReportDependencies(fail="attendance")
         assert (
             client.get(
-                "/api/v1/reports/attendance/lowest", params=report_query()
+                "/api/v1/reports/lowest-attendance", params=report_query()
             ).status_code
             == 503
         )
         assert (
             client.get(
-                "/api/v1/reports/attendance/lowest",
+                "/api/v1/reports/lowest-attendance",
                 params=report_query(date_from="2026-01-01"),
             ).status_code
             == 422
@@ -220,7 +220,7 @@ def test_report_rejects_mismatched_attendance_week(load_app):
     with TestClient(module.app) as client:
         module.app.state.client = dependency
         response = client.get(
-            "/api/v1/reports/attendance/lowest", params=report_query()
+            "/api/v1/reports/lowest-attendance", params=report_query()
         )
     assert response.status_code == 503
 

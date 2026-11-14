@@ -63,13 +63,13 @@ workspace "University Production System" "C4-модель университет
             autoLayout lr
         }
 
-        container university "API-and-services" {
+        container university "API-and-services -- Containers" {
             title "C4: пользователь, API Gateway и сервисы"
             include user gateway reports roomReports academic student schedule attendance
             autoLayout lr
         }
 
-        container university "Containers" {
+        container university "Components" {
             title "C4: сервисы и хранилища"
             include *
             autoLayout lr

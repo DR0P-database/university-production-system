@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -203,6 +204,9 @@ class LectureCourse(TimestampMixin, Base):
 
 
 class Lecture(TimestampMixin, Base):
+    tags: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, server_default=text("'[]'")
+    )
     __tablename__ = "lectures"
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -29,7 +29,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Laboratory 2 Room Requirements", version="1.0.0", lifespan=lifespan
+    title="Laboratory 2 Room Requirements",
+    version="1.0.0",
+    openapi_tags=[
+        {
+            "name": "Лабораторная 2",
+            "description": "Расчёт вместимости аудитории по курсу и подбор курсов по расписанию.",
+        }
+    ],
+    lifespan=lifespan,
 )
 
 
@@ -152,7 +160,16 @@ class RoomReport(BaseModel):
     items: list[RoomItem]
 
 
-@app.get("/api/v1/reports/capacity", response_model=RoomReport, tags=["reports"])
+@app.get(
+    "/api/v1/reports/classroom-capacity",
+    response_model=RoomReport,
+    tags=["Лабораторная 2"],
+    summary="Необходимая вместимость аудитории для занятий предмета",
+    description=(
+        "Возвращает занятия выбранного предмета с непустыми техническими требованиями "
+        "и необходимое количество посадочных мест."
+    ),
+)
 async def capacity(
     request: Request,
     course_id: UUID,
@@ -244,7 +261,12 @@ class ScheduledCourses(BaseModel):
     items: list[ScheduledCourseItem]
 
 
-@app.get("/api/v1/reports/courses", response_model=ScheduledCourses, tags=["reports"])
+@app.get(
+    "/api/v1/reports/courses",
+    response_model=ScheduledCourses,
+    tags=["Лабораторная 2"],
+    summary="Предметы, занятия которых назначены в выбранном году",
+)
 async def scheduled_courses(
     request: Request,
     year: int = Query(

@@ -34,26 +34,26 @@ def test_capacity_counts_active_cohort_and_filters_requirements(load_app):
             transport=httpx.MockTransport(handler)
         )
         query = dict(course_id=course_id, semester=1, study_year=1, academic_year=2026)
-        response = client.get("/api/v1/reports/capacity", params=query)
+        response = client.get("/api/v1/reports/classroom-capacity", params=query)
         assert response.status_code == 200
         assert response.json()["required_seats"] == 2
         assert len(response.json()["items"]) == 1
         response = client.get(
-            "/api/v1/reports/capacity",
+            "/api/v1/reports/classroom-capacity",
             params={**query, "equipment_term": "микроскоп"},
         )
         assert response.json()["items"] == []
         assert response.json()["required_seats"] == 0
         assert (
             client.get(
-                "/api/v1/reports/capacity", params={**query, "study_year": 2}
+                "/api/v1/reports/classroom-capacity", params={**query, "study_year": 2}
             ).status_code
             == 422
         )
         module.app.state.client = httpx.AsyncClient(
             transport=httpx.MockTransport(lambda r: httpx.Response(503))
         )
-        assert client.get("/api/v1/reports/capacity", params=query).status_code == 503
+        assert client.get("/api/v1/reports/classroom-capacity", params=query).status_code == 503
 
 
 def test_scheduled_courses_excludes_cancelled_and_filters_year(load_app):

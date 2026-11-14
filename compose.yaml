@@ -8,6 +8,7 @@ include:
   - path: ./services/attendance-service/compose.yaml
   - path: ./services/report-service/compose.yaml
   - path: ./services/room-report-service/compose.yaml
+  - path: ./services/group-hours-report-service/compose.yaml
   - path: ./tools/data-seeder/compose.yaml
   - path: ./databases/postgresql/compose.yaml
   - path: ./databases/redis/compose.yaml

@@ -114,7 +114,7 @@ curl --get \
   --data-urlencode "search_mode=words" \
   --data-urlencode "date_from=2026-09-01" \
   --data-urlencode "date_to=2026-10-31" \
-  "http://localhost:8000/api/v1/reports/attendance/lowest"
+  "http://localhost:8000/api/v1/reports/lowest-attendance"
 ```
 
 `search_mode=words` (по умолчанию) требует все токены в любом порядке;
@@ -212,7 +212,7 @@ tests/                      contract и business-rule tests
 
 Отдельный контейнер `room-report-service` рассчитывает вместимость для всех
 активных студентов специальности курса выбранного набора. Метод с JWT:
-`GET /api/v1/reports/capacity?course_id=<UUID>&semester=1&study_year=1&academic_year=2026`.
+`GET /api/v1/reports/classroom-capacity?course_id=<UUID>&semester=1&study_year=1&academic_year=2026`.
 `academic_year` — год начала учебного года, `study_year` — год обучения,
 `semester` — сквозной номер семестра (1–12). Необязательный `equipment_term`
 фильтрует непустые требования по подстроке без учёта регистра.
@@ -234,4 +234,16 @@ tests/                      contract и business-rule tests
 поиск его не покажет; наличие курса в учебном плане само по себе не доказывает
 его проведение в конкретном году. `year` — календарный год, а `academic_year`
 в отчёте вместимости — год начала учебного года.
-Полученный `course.id` передаётся как `course_id` в `/api/v1/reports/capacity`.
+Полученный `course.id` передаётся как `course_id` в `/api/v1/reports/classroom-capacity`.
+
+## Практическая работа №3: часы по группе
+
+Отдельный контейнер `group-hours-report-service`, метод Gateway в группе `Лабораторная 3`:
+`GET /api/v1/reports/group-lecture-hours?group_id=<UUID>&discipline_tag=специальная-дисциплина`.
+
+После пересборки запустите `docker compose run --rm --build seed-data`: генератор
+добавит теги новым и уже существующим SEED-занятиям. Удалять базу не требуется.
+
+Пошаговая ручная проверка в Swagger, формулы и объяснение полей:
+[LAB3_REPORT.md](LAB3_REPORT.md). Независимая проверка через API и сохранение
+журнала: `python tools/lab3/capture.py` → `docs/lab3/evidence.json`.

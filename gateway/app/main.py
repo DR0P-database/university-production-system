@@ -33,6 +33,11 @@ ROOM_REPORT_SERVICE_URL = os.getenv(
 )
 
 
+GROUP_HOURS_REPORT_SERVICE_URL = os.getenv(
+    "GROUP_HOURS_REPORT_SERVICE_URL", "http://group-hours-report-service:8000"
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     timeout = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "5"))
@@ -88,7 +93,11 @@ async def openapi_schema(request: Request) -> JSONResponse:
         try:
             service_schemas = await fetch_service_schemas(
                 request.app.state.client,
-                {**SERVICE_PREFIXES, "reports_lab2": ROOM_REPORT_SERVICE_URL},
+                {
+                    **SERVICE_PREFIXES,
+                    "reports_lab2": ROOM_REPORT_SERVICE_URL,
+                    "reports_lab3": GROUP_HOURS_REPORT_SERVICE_URL,
+                },
             )
             request.app.state.merged_openapi = merge_openapi_schemas(
                 request.app.routes, service_schemas
@@ -136,8 +145,10 @@ async def redoc() -> HTMLResponse:
 async def proxy(service: str, request: Request, path: str = "") -> Response:
     """Forward an authenticated API request to an internal service."""
     base_url = (
-        ROOM_REPORT_SERVICE_URL
-        if service == "reports" and path in {"capacity", "courses"}
+        GROUP_HOURS_REPORT_SERVICE_URL
+        if service == "reports" and path == "group-lecture-hours"
+        else ROOM_REPORT_SERVICE_URL
+        if service == "reports" and path in {"classroom-capacity", "courses"}
         else SERVICE_PREFIXES.get(service)
     )
     if base_url is None:

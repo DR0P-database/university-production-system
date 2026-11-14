@@ -59,6 +59,7 @@ class CourseCreate(StrictModel):
 
 
 class LectureCreate(StrictModel):
+    tags: list[str] = Field(default_factory=list, max_length=100)
     course_id: UUID
     title: str = Field(min_length=1, max_length=500)
     annotation: str | None = None
