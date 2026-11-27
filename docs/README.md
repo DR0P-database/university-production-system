@@ -3,6 +3,8 @@
 Микросервисный backend университетской системы на FastAPI с PostgreSQL,
 MongoDB, Elasticsearch, Redis и Neo4j.
 
+[Учебный стенд ПР №1–3 и ЛР №1–3](../coursework/README.md) · [Описание изменений](../coursework/CHANGES.md).
+
 - [ARCHITECTURE.md](ARCHITECTURE.md) — сервисы, модели данных, хранилища и
   архитектурные правила.
 - [TODO.md](../TODO.md) — что реализовано и план дальнейшего развития.

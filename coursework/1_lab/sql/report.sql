@@ -1,0 +1,268 @@
+WITH
+params AS (
+  SELECT j,
+         (j->>'date_from')::date AS d1,
+         (j->>'date_to')::date AS d2,
+         (j->>'department_id')::int AS department_id,
+         (j->>'group_id')::int AS group_id,
+         (j->>'limit')::int AS row_limit,
+         coalesce((j->>'include_trace')::boolean, false) AS include_trace
+  FROM (SELECT %(params)s::jsonb AS j) p
+),
+hits AS (
+  SELECT * FROM jsonb_to_recordset(%(materials)s::jsonb)
+    AS h(id integer, lecture_id integer, course_id integer)
+),
+valid_hits AS (
+  SELECT h.id, h.lecture_id
+  FROM hits h
+  JOIN practice03.lecture_materials m ON m.id = h.id AND m.lecture_id = h.lecture_id
+  JOIN practice03.lectures l ON l.id = m.lecture_id AND l.course_id = h.course_id
+),
+matched_lectures AS (
+  SELECT DISTINCT lecture_id FROM valid_hits
+),
+graph_schedule AS (
+  SELECT * FROM jsonb_to_recordset(%(graph_schedule)s::jsonb)
+    AS g(schedule_id integer, lecture_id integer, course_id integer,
+         group_id integer, scheduled_date date, status text)
+),
+graph_members AS (
+  SELECT * FROM jsonb_to_recordset(%(graph_members)s::jsonb)
+    AS m(student_id integer, group_id integer, record_book text)
+),
+canonical_schedule AS (
+  SELECT sc.id AS schedule_id, sc.lecture_id, l.course_id, sc.group_id,
+         sc.scheduled_date, 'completed'::text AS status
+  FROM practice03.schedule sc
+  JOIN matched_lectures ml ON ml.lecture_id = sc.lecture_id
+  JOIN practice03.lectures l ON l.id = sc.lecture_id
+  JOIN practice03.courses c ON c.id = l.course_id
+  CROSS JOIN params p
+  WHERE l.lesson_type = 'lecture'
+    AND sc.status = 'completed'
+    AND sc.scheduled_date BETWEEN p.d1 AND p.d2
+    AND (p.group_id IS NULL OR sc.group_id = p.group_id)
+),
+graph_missing_schedules AS (
+  SELECT c.schedule_id FROM canonical_schedule c
+  LEFT JOIN graph_schedule g ON g.schedule_id = c.schedule_id
+  WHERE g.schedule_id IS NULL
+),
+graph_extra_schedules AS (
+  SELECT g.schedule_id FROM graph_schedule g
+  LEFT JOIN canonical_schedule c ON c.schedule_id = g.schedule_id
+  WHERE c.schedule_id IS NULL
+),
+graph_wrong_schedules AS (
+  SELECT c.schedule_id
+  FROM canonical_schedule c
+  JOIN graph_schedule g ON g.schedule_id = c.schedule_id
+  WHERE g.lecture_id IS DISTINCT FROM c.lecture_id
+     OR g.course_id IS DISTINCT FROM c.course_id
+     OR g.group_id IS DISTINCT FROM c.group_id
+     OR g.scheduled_date IS DISTINCT FROM c.scheduled_date
+     OR g.status IS DISTINCT FROM c.status
+),
+selected_schedule AS (
+  SELECT sc.*, g.course_id, l.title AS lecture_title, c.title AS course_title
+  FROM graph_schedule g
+  JOIN practice03.schedule sc ON sc.id = g.schedule_id
+  JOIN practice03.lectures l ON l.id = g.lecture_id
+  JOIN practice03.courses c ON c.id = g.course_id
+  JOIN practice03.study_groups grp ON grp.id = sc.group_id
+  CROSS JOIN params p
+  WHERE (p.department_id IS NULL OR grp.department_id = p.department_id)
+),
+canonical_members AS (
+  SELECT st.id AS student_id, st.group_id, st.record_book
+  FROM practice03.students st
+  WHERE st.group_id IN (SELECT group_id FROM graph_schedule)
+),
+graph_missing_members AS (
+  SELECT c.student_id FROM canonical_members c
+  LEFT JOIN graph_members g ON g.student_id = c.student_id AND g.group_id = c.group_id
+  WHERE g.student_id IS NULL
+),
+graph_extra_members AS (
+  SELECT g.student_id FROM graph_members g
+  LEFT JOIN canonical_members c ON c.student_id = g.student_id AND c.group_id = g.group_id
+  WHERE c.student_id IS NULL
+),
+graph_wrong_members AS (
+  SELECT c.student_id
+  FROM canonical_members c
+  JOIN graph_members g ON g.student_id = c.student_id
+  WHERE g.group_id IS DISTINCT FROM c.group_id
+     OR g.record_book IS DISTINCT FROM c.record_book
+),
+-- MATERIALIZED + LATERAL/OFFSET 0 удерживают один индексный поиск на занятие.
+actual_marks AS MATERIALIZED (
+  SELECT sc.id AS schedule_id, sc.week_start_date, sc.group_id, sc.scheduled_date,
+         am.student_id, am.is_present
+  FROM selected_schedule sc
+  CROSS JOIN LATERAL (
+    SELECT a.student_id, a.is_present
+    FROM practice03.attendance a
+    WHERE a.schedule_id = sc.id
+      AND a.week_start_date = sc.week_start_date
+      AND a.week_start_date >= (SELECT d1 - (extract(isodow FROM d1)::int - 1) FROM params)
+      AND a.week_start_date <= (SELECT d2 - (extract(isodow FROM d2)::int - 1) FROM params)
+    OFFSET 0
+  ) am
+),
+present_rows AS (
+  SELECT gm.student_id, 'expected'::text AS kind
+  FROM graph_members gm
+  JOIN selected_schedule ss ON ss.group_id = gm.group_id
+  JOIN practice03.students st
+    ON st.id = gm.student_id
+   AND st.enrollment_date <= ss.scheduled_date
+),
+mark_rows AS (
+  SELECT am.student_id,
+         CASE WHEN am.is_present THEN 'present' ELSE 'absent' END AS kind
+  FROM actual_marks am
+  JOIN graph_members gm ON gm.student_id = am.student_id
+                        AND gm.group_id = am.group_id
+  JOIN practice03.students st
+    ON st.id = am.student_id
+   AND st.enrollment_date <= am.scheduled_date
+),
+-- Одна агрегация исключает повторное выполнение агрегата внутри nested loop.
+counts AS (
+  SELECT student_id,
+         count(*) FILTER (WHERE kind = 'expected') AS expected_count,
+         count(*) FILTER (WHERE kind = 'present') AS present_count,
+         count(*) FILTER (WHERE kind = 'absent') AS absent_count,
+         count(*) FILTER (WHERE kind = 'expected')
+           - count(*) FILTER (WHERE kind = 'present')
+           - count(*) FILTER (WHERE kind = 'absent') AS unknown_count
+  FROM (
+    SELECT student_id, kind FROM present_rows
+    UNION ALL
+    SELECT student_id, kind FROM mark_rows
+  ) u
+  GROUP BY student_id
+),
+ranked AS (
+  SELECT co.*, st.record_book,
+         100.0 * present_count / expected_count AS raw_percentage
+  FROM counts co
+  JOIN practice03.students st ON st.id = co.student_id
+  WHERE unknown_count = 0
+  ORDER BY 100.0 * present_count / expected_count,
+            st.record_book COLLATE "C",
+            student_id
+  LIMIT (SELECT row_limit FROM params)
+),
+winner_sessions AS (
+  SELECT w.student_id,
+         jsonb_agg(jsonb_build_object(
+              'schedule_id', w.schedule_id, 'lecture_id', w.lecture_id,
+              'course_id', w.course_id, 'course_title', w.course_title,
+              'lecture_title', w.lecture_title, 'date', w.scheduled_date,
+              'is_present', w.is_present)
+            ORDER BY w.scheduled_date, w.starts_at, w.schedule_id) AS sessions
+  FROM (
+    SELECT mg.student_id,
+           ss.id AS schedule_id, ss.lecture_id, ss.course_id,
+           ss.course_title, ss.lecture_title, ss.scheduled_date, ss.starts_at,
+           a.is_present
+    FROM (
+      SELECT r.student_id, gm.group_id
+      FROM ranked r
+      JOIN graph_members gm ON gm.student_id = r.student_id
+      OFFSET 0
+    ) mg
+    JOIN practice03.students st
+      ON st.id = mg.student_id
+    JOIN selected_schedule ss
+      ON ss.group_id = mg.group_id
+     AND st.enrollment_date <= ss.scheduled_date
+    LEFT JOIN practice03.attendance a
+      ON a.schedule_id = ss.id
+     AND a.student_id = mg.student_id
+     AND a.week_start_date = ss.week_start_date
+     AND a.week_start_date >= (SELECT d1 - (extract(isodow FROM d1)::int - 1) FROM params)
+     AND a.week_start_date <= (SELECT d2 - (extract(isodow FROM d2)::int - 1) FROM params)
+  ) w
+  GROUP BY w.student_id
+),
+details AS (
+  SELECT r.raw_percentage, r.record_book, r.student_id,
+         jsonb_build_object(
+            'student_pg', to_jsonb(st),
+            'group', to_jsonb(g),
+            'specialty', to_jsonb(sp),
+            'department', to_jsonb(d),
+            'institute', to_jsonb(i),
+            'university', to_jsonb(u),
+            'attendance_percentage', round(r.raw_percentage, 2),
+            'present_count', r.present_count,
+            'absent_count', r.absent_count,
+            'expected_count', r.expected_count,
+            'unknown_count', r.unknown_count,
+            'period', jsonb_build_object('from', p.d1, 'to', p.d2, 'inclusive', true),
+            'term', p.j->>'term',
+            'sessions', coalesce(ws.sessions, '[]'::jsonb)) AS doc
+  FROM ranked r
+  LEFT JOIN winner_sessions ws ON ws.student_id = r.student_id
+  JOIN practice03.students st ON st.id = r.student_id
+  JOIN practice03.study_groups g ON g.id = st.group_id
+  JOIN practice03.specialties sp ON sp.id = g.specialty_id
+  JOIN practice03.departments d ON d.id = g.department_id
+  JOIN practice03.institutes i ON i.id = d.institute_id
+  JOIN practice03.universities u ON u.id = i.university_id
+  CROSS JOIN params p
+)
+SELECT jsonb_build_object(
+  'matched_lecture_ids',
+    coalesce((SELECT jsonb_agg(lecture_id ORDER BY lecture_id) FROM matched_lectures), '[]'::jsonb),
+  'unlinked_materials',
+    coalesce((SELECT jsonb_agg(h.id ORDER BY h.id) FROM hits h
+              LEFT JOIN valid_hits v ON v.id = h.id WHERE v.id IS NULL), '[]'::jsonb),
+  'graph_schedule_count', (SELECT count(*) FROM graph_schedule),
+  'graph_member_count', (SELECT count(*) FROM graph_members),
+  'graph_group_ids',
+    coalesce((SELECT jsonb_agg(DISTINCT group_id ORDER BY group_id) FROM graph_schedule), '[]'::jsonb),
+  'graph_missing_schedules',
+    coalesce((SELECT jsonb_agg(schedule_id ORDER BY schedule_id) FROM graph_missing_schedules), '[]'::jsonb),
+  'graph_extra_schedules',
+    coalesce((SELECT jsonb_agg(schedule_id ORDER BY schedule_id) FROM graph_extra_schedules), '[]'::jsonb),
+  'graph_wrong_schedules',
+    coalesce((SELECT jsonb_agg(schedule_id ORDER BY schedule_id) FROM graph_wrong_schedules), '[]'::jsonb),
+  'graph_missing_members',
+    coalesce((SELECT jsonb_agg(student_id ORDER BY student_id) FROM graph_missing_members), '[]'::jsonb),
+  'graph_extra_members',
+    coalesce((SELECT jsonb_agg(student_id ORDER BY student_id) FROM graph_extra_members), '[]'::jsonb),
+  'graph_wrong_members',
+    coalesce((SELECT jsonb_agg(student_id ORDER BY student_id) FROM graph_wrong_members), '[]'::jsonb),
+  'selected_schedule_count', (SELECT count(*) FROM selected_schedule),
+  'selected_schedule',
+    CASE WHEN (SELECT include_trace FROM params)
+         THEN coalesce((SELECT jsonb_agg(to_jsonb(sc) ORDER BY scheduled_date, starts_at, id)
+                        FROM selected_schedule sc), '[]'::jsonb)
+         ELSE '[]'::jsonb END,
+  'aggregation',
+    CASE WHEN (SELECT include_trace FROM params)
+         THEN coalesce((SELECT jsonb_agg(jsonb_build_object(
+                     'student_id', student_id, 'expected_count', expected_count,
+                     'present_count', present_count, 'absent_count', absent_count,
+                     'unknown_count', unknown_count, 'raw_percentage',
+                       round(100.0 * present_count / expected_count, 4))
+                     ORDER BY student_id) FROM counts), '[]'::jsonb)
+         ELSE '[]'::jsonb END,
+  'incomplete_students',
+    coalesce((SELECT jsonb_agg(jsonb_build_object(
+                'student_id', student_id, 'expected_count', expected_count,
+                'present_count', present_count, 'unknown_count', unknown_count,
+                'minimum_percentage', round(100.0 * present_count / expected_count, 2),
+                'maximum_percentage', round(100.0 * (present_count + unknown_count) / expected_count, 2))
+              ORDER BY student_id) FROM counts WHERE unknown_count > 0), '[]'::jsonb),
+  'eligible_student_count', (SELECT count(*) FROM counts),
+  'complete_student_count', (SELECT count(*) FROM counts WHERE unknown_count = 0),
+  'results',
+    coalesce((SELECT jsonb_agg(doc ORDER BY raw_percentage, record_book COLLATE "C", student_id)
+              FROM details), '[]'::jsonb)
+) AS report;

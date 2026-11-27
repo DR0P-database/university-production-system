@@ -1,0 +1,17 @@
+# Секреты: ключи JWT, пароли, .env — генерируются локально scripts/configure.py / bootstrap.py
+secrets/
+.env
+deploy/pr3.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Результаты прогонов
+output/
+*.log
+
+# macOS
+.DS_Store
