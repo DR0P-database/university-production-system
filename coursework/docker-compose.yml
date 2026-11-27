@@ -1,0 +1,130 @@
+# Практическая работа №1: пять СУБД с разными моделями хранения.
+# Данные каждой службы лежат в ./data/<служба>, логи — в ./logs/<служба>
+# (bind mount, чтобы их было видно прямо в папке проекта).
+
+name: coursework-practices
+
+services:
+  # --- Key-value ---
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - ./data/redis:/data
+      - ./logs/redis:/logs
+    # appendonly — AOF-журнал для сохранности данных, logfile — лог в файл
+    command: >
+      redis-server
+      --requirepass password
+      --appendonly yes
+      --dir /data
+      --logfile /logs/redis.log
+      --loglevel notice
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Документная ---
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "127.0.0.1:27027:27017"
+    volumes:
+      - ./data/mongodb:/data/db
+      - ./logs/mongodb:/var/log/mongodb
+    command: >
+      mongod
+      --bind_ip_all
+      --wiredTigerCacheSizeGB 0.5
+      --logpath /var/log/mongodb/mongod.log
+      --logappend
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "admin", "-p", "password", "--authenticationDatabase", "admin", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Графовая ---
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
+    ports:
+      - "127.0.0.1:17474:7474" # Neo4j Browser (веб-интерфейс)
+      - "127.0.0.1:17687:7687" # Bolt (драйверы, cypher-shell)
+    volumes:
+      - ./data/neo4j:/data
+      - ./logs/neo4j:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # --- Полнотекстовый поиск ---
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    restart: unless-stopped
+    environment:
+      - node.name=es-node-1
+      - cluster.name=practice-cluster
+      - discovery.type=single-node
+      - xpack.security.enabled=false # без HTTPS/паролей для локальной разработки
+      - xpack.ml.enabled=false
+      - path.data=/usr/share/elasticsearch/data
+      - path.logs=/usr/share/elasticsearch/logs
+      # ES — master-хранилище текстов лекций (ПР3), реплики на одном узле нет,
+      # поэтому нужны снимки (snapshot) в отдельный каталог
+      - path.repo=/usr/share/elasticsearch/snapshots
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # ограничиваем память JVM
+    ports:
+      - "127.0.0.1:19200:9200"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - ./data/elasticsearch-snapshots:/usr/share/elasticsearch/snapshots
+      - ./logs/elasticsearch:/usr/share/elasticsearch/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # --- Реляционная (транзакционные данные) ---
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: main_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql
+    # logging_collector пишет лог-файлы в log_directory, log_statement=all — все SQL-запросы
+    command: >
+      postgres
+      -c logging_collector=on
+      -c log_directory=/var/log/postgresql
+      -c log_filename=postgresql-%Y-%m-%d.log
+      -c log_statement=all
+      -c log_connections=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d main_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

@@ -1,0 +1,23 @@
+{
+  "scenario": {
+    "term": "целостность",
+    "date_from": "2026-09-07",
+    "date_to": "2026-12-27"
+  },
+  "warmup": 2,
+  "repeats": 5,
+  "scope": "Gateway → Report → ES multi_match + Neo4j + PostgreSQL + Redis → compact JSON",
+  "timing_ms": {
+    "median": 27.63233299992862,
+    "min": 27.407292000134476,
+    "max": 36.44712499954039,
+    "samples": [
+      28.020083000228624,
+      27.48937499927706,
+      27.63233299992862,
+      27.407292000134476,
+      36.44712499954039
+    ]
+  },
+  "query_sha256": "3d02d5487e45513b01294710a305e3c23e3fecb6ccb128a9d54b57b832dba2db"
+}

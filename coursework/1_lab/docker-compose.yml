@@ -1,0 +1,198 @@
+
+name: coursework-labs
+
+networks:
+  lab1_net:
+
+volumes:
+  lab1_demo_pg:
+  lab1_demo_redis:
+  lab1_demo_neo4j:
+  lab1_demo_es:
+  lab_reports_mongo:
+  lab1_gateway_replay:
+
+x-report-environment: &report-environment
+  PG_DSN: "host=demo-postgres port=5432 dbname=lab1_demo user=report_reader password=${DEMO_REPORT_DB_PASSWORD}"
+  NEO4J_URI: bolt://demo-neo4j:7687
+  NEO4J_USER: neo4j
+  NEO4J_PASSWORD: ${DEMO_NEO4J_PASSWORD}
+  USER_ISSUER_PUBLIC_KEY_FILE: /secrets/user_public.pem
+  SERVICE_ISSUER_PUBLIC_KEY_FILE: /secrets/service_issuer_public.pem
+
+x-report-container: &report-container
+  build: .
+  image: coursework/labs:local
+  volumes:
+    - ./secrets/user_public.pem:/secrets/user_public.pem:ro
+    - ./secrets/service_issuer_public.pem:/secrets/service_issuer_public.pem:ro
+  restart: unless-stopped
+  networks: [lab1_net]
+
+services:
+  gateway:
+    build: .
+    image: coursework/labs:local
+    command: ["python", "-m", "app.gateway"]
+    environment:
+      USER_ISSUER_PRIVATE_KEY_FILE: /secrets/user_private.pem
+      USER_ISSUER_PUBLIC_KEY_FILE: /secrets/user_public.pem
+      SERVICE_ISSUER_PRIVATE_KEY_FILE: /secrets/service_issuer_private.pem
+      SERVICE_ISSUER_PUBLIC_KEY_FILE: /secrets/service_issuer_public.pem
+      LAB1_CLIENTS_FILE: /secrets/clients.json
+      LAB1_USERS_FILE: /secrets/users.json
+      REPLAY_DB_FILE: /var/lib/lab1/replay/replay.sqlite
+      SERVICE_CLIENT_PRIVATE_KEY_FILE: /secrets/gateway_client_private.pem
+      SERVICE_TOKEN_URL: http://gateway:8000/auth/service-token
+      REPORT_URL: http://report:8001
+    volumes:
+      - ./secrets/user_private.pem:/secrets/user_private.pem:ro
+      - ./secrets/user_public.pem:/secrets/user_public.pem:ro
+      - ./secrets/service_issuer_private.pem:/secrets/service_issuer_private.pem:ro
+      - ./secrets/service_issuer_public.pem:/secrets/service_issuer_public.pem:ro
+      - ./secrets/clients.json:/secrets/clients.json:ro
+      - ./secrets/users.json:/secrets/users.json:ro
+      - ./secrets/gateway_client_private.pem:/secrets/gateway_client_private.pem:ro
+      - lab1_gateway_replay:/var/lib/lab1/replay
+    ports:
+      - "127.0.0.1:${LAB_GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      - report
+      - rooms
+      - hours
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  report:
+    <<: *report-container
+    command: ["python", "-m", "app.report"]
+    environment:
+      <<: *report-environment
+      ES_URL: http://demo-es:9200
+      ES_INDEX: practice03_materials
+      REDIS_HOST: demo-redis
+
+  rooms:
+    <<: *report-container
+    command: ["python", "-m", "app.additional_reports"]
+    environment:
+      <<: *report-environment
+      REPORT_KIND: rooms
+
+  hours:
+    <<: *report-container
+    command: ["python", "-m", "app.additional_reports"]
+    environment:
+      <<: *report-environment
+      REPORT_KIND: hours
+      REDIS_HOST: demo-redis
+
+  generator:
+    build: .
+    image: coursework/labs:local
+    command: ["python", "-m", "app.generator"]
+    environment:
+      SERVICE_CLIENT_PRIVATE_KEY_FILE: /secrets/generator_client_private.pem
+      SERVICE_TOKEN_URL: http://gateway:8000/auth/service-token
+      DEMO_PG_HOST: demo-postgres
+      DEMO_PG_PORT: "5432"
+      DEMO_PG_DB: lab1_demo
+      DEMO_PG_USER: demo
+      DEMO_PG_PASSWORD: ${DEMO_GENERATOR_DB_PASSWORD}
+      DEMO_REDIS_HOST: demo-redis
+      DEMO_REDIS_PORT: "6379"
+      DEMO_NEO4J_URI: bolt://demo-neo4j:7687
+      DEMO_NEO4J_USER: neo4j
+      DEMO_NEO4J_PASSWORD: ${DEMO_NEO4J_PASSWORD}
+      DEMO_ES_URL: http://demo-es:9200
+      GATEWAY_INTERNAL_URL: http://gateway:8000
+      REPORT_INTERNAL_URL: http://report:8001
+    volumes:
+      - ./secrets/generator_client_private.pem:/secrets/generator_client_private.pem:ro
+    depends_on:
+      demo-postgres:
+        condition: service_healthy
+      demo-redis:
+        condition: service_healthy
+      demo-neo4j:
+        condition: service_healthy
+      demo-es:
+        condition: service_healthy
+      demo-mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  demo-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DEMO_POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: lab1_demo
+      DEMO_GENERATOR_DB_PASSWORD: ${DEMO_GENERATOR_DB_PASSWORD}
+      DEMO_REPORT_DB_PASSWORD: ${DEMO_REPORT_DB_PASSWORD}
+    volumes:
+      - lab1_demo_pg:/var/lib/postgresql/data
+      - ./deploy/demo-postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lab1_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  demo-es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - lab1_demo_es:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  demo-redis:
+    image: redis:7-alpine
+    volumes:
+      - lab1_demo_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  demo-neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/${DEMO_NEO4J_PASSWORD}
+      NEO4J_server_memory_pagecache_size: 256m
+    volumes:
+      - lab1_demo_neo4j:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+    restart: unless-stopped
+    networks: [lab1_net]
+
+  demo-mongo:
+    image: mongo:7
+    volumes:
+      - lab_reports_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    restart: unless-stopped
+    networks: [lab1_net]

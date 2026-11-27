@@ -1,0 +1,2008 @@
+{
+  "tool": "lab1-sql-benchmark",
+  "generated_at_utc": "2026-11-14T08:35:11.756234+00:00",
+  "run_id": "e6208012",
+  "seed": 0.42,
+  "note": "все данные синтетические (демо), не исходные 104 студента отчёта ПР3",
+  "postgres_version": "PostgreSQL 16.15 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+  "host": {
+    "platform": "Linux-7.0.12-linuxkit-aarch64-with-glibc2.41",
+    "machine": "aarch64",
+    "cpu_count": 10,
+    "memory_bytes": null,
+    "python": "3.12.16"
+  },
+  "sql_sha256": {
+    "baseline": "f669e842d0e8d1039b0c88704ddb6d105a9fe2c60914a9ea15d83f4d12653324",
+    "optimized": "3d02d5487e45513b01294710a305e3c23e3fecb6ccb128a9d54b57b832dba2db",
+    "schema": "13b030fb3109ed7c7077a2f776d8464087a5c70f2eafc4bbc4644bd7990b1a3c",
+    "fixture": "407649238245d870ecd46296ddc801ecd62ea8b26d6c1e905d127d6ba338c9a8"
+  },
+  "methodology": {
+    "isolation": "REPEATABLE READ READ ONLY, rollback после каждого выполнения",
+    "warmup_rounds": 2,
+    "measured_reps": 5,
+    "alternating_order": true,
+    "server_time": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON): Execution Time",
+    "client_time": "psycopg execute+fetch (wall clock); сериализация параметров (json.dumps params/materials/graph_*) и построение graph payload (build_graph_payload) — вне таймера",
+    "include_trace_during_timing": false,
+    "buffers": "корневой узел Plan (агрегат поддерева), без суммирования узлов",
+    "partitions": "planned = EXPLAIN без ANALYZE; executed = Actual Loops > 0; плюс Subplans Removed (runtime pruning)",
+    "cases": "полные 16 недель 2026-09-07..2026-12-27; таймируемые прогоны только на валидных material IDs, unlinked/missing junk — отдельный correctness-прогон",
+    "timed_scenario": "успешный отчёт (200) c missing_policy=exclude: рейтинг только по complete-студентам, incomplete перечислены отдельно (ranking_complete=false при наличии unknown); strict-409 успешным запросом не считается и не таймируется",
+    "scope": "таймируется ТОЛЬКО SQL (psycopg → PostgreSQL: Execution Time и client execute+fetch); время API-слоя, Elasticsearch-поиска и сериализации HTTP в замеры не входит",
+    "graph_payload": "СИНТЕТИЧЕСКИЙ вход графового контракта: расписание и состав участников строятся из той же fixture-PG (build_graph_payload, семантика Cypher адаптера Neo4j). Это НЕ измерение живого Neo4j; реальный HTTP-путь на живых четырёх хранилищах измеряется отдельно",
+    "planner_flags": "не менялись (enable_seqscan и пр. не трогались)",
+    "statement_timeout": "180s"
+  },
+  "datasets": {
+    "lab1_benchmark_e6208012_100": {
+      "students": 100,
+      "study_groups": 4,
+      "courses": 8,
+      "lectures": 96,
+      "lecture_materials": 192,
+      "schedule": 448,
+      "attendance": 9965,
+      "attendance_total_bytes": 3072000,
+      "schedule_total_bytes": 278528
+    },
+    "lab1_benchmark_e6208012_1000": {
+      "students": 1000,
+      "study_groups": 40,
+      "courses": 8,
+      "lectures": 96,
+      "lecture_materials": 192,
+      "schedule": 4480,
+      "attendance": 99526,
+      "attendance_total_bytes": 16596992,
+      "schedule_total_bytes": 1425408
+    },
+    "lab1_benchmark_e6208012_10000": {
+      "students": 10000,
+      "study_groups": 400,
+      "courses": 8,
+      "lectures": 96,
+      "lecture_materials": 192,
+      "schedule": 44800,
+      "attendance": 995462,
+      "attendance_total_bytes": 150216704,
+      "schedule_total_bytes": 12328960
+    }
+  },
+  "cases": [
+    {
+      "dataset": "lab1_benchmark_e6208012_100",
+      "case": "week",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-09-13",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "5d8a50d525957d22a76f700a216c59eb1e6b89d8a915ad898efa3ca1077543be",
+        "sha256_optimized": "5d8a50d525957d22a76f700a216c59eb1e6b89d8a915ad898efa3ca1077543be"
+      },
+      "junk_correctness": {
+        "junk_ids": [
+          9,
+          999001
+        ],
+        "unlinked_materials_equals_junk": true,
+        "matched_unchanged": true,
+        "baseline_equals_optimized": true,
+        "tampered_graph_detected": true
+      },
+      "baseline": {
+        "exec_time_ms": {
+          "min": 1.746,
+          "median": 1.787,
+          "max": 1.81
+        },
+        "client_time_ms": {
+          "min": 3.89,
+          "median": 3.928,
+          "max": 4.145
+        },
+        "planning_time_ms": {
+          "min": 1.592,
+          "median": 1.621,
+          "max": 1.703
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 1324,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 1.883,
+          "median": 1.899,
+          "max": 1.941
+        },
+        "client_time_ms": {
+          "min": 4.088,
+          "median": 4.196,
+          "max": 4.259
+        },
+        "planning_time_ms": {
+          "min": 1.767,
+          "median": 1.801,
+          "max": 1.878
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 1234,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 0.941,
+      "speedup_client_median": 0.936,
+      "sanity": {
+        "selected_schedule_count": 8,
+        "eligible_student_count": 92,
+        "complete_student_count": 83,
+        "incomplete_students_count": 9,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          7,
+          9,
+          11,
+          12,
+          24,
+          30
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_100",
+      "case": "term16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "a8ccb3036700a56d7f2d26e71c4356c45d28948cfd4dffadf0b8bf948bf6b8db",
+        "sha256_optimized": "a8ccb3036700a56d7f2d26e71c4356c45d28948cfd4dffadf0b8bf948bf6b8db"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 42.275,
+          "median": 42.533,
+          "max": 42.698
+        },
+        "client_time_ms": {
+          "min": 32.974,
+          "median": 33.352,
+          "max": 33.621
+        },
+        "planning_time_ms": {
+          "min": 1.655,
+          "median": 1.674,
+          "max": 1.731
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 90749,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 11.768,
+          "median": 11.824,
+          "max": 11.92
+        },
+        "client_time_ms": {
+          "min": 12.112,
+          "median": 12.215,
+          "max": 12.262
+        },
+        "planning_time_ms": {
+          "min": 1.808,
+          "median": 1.87,
+          "max": 1.931
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 15055,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 3.597,
+      "speedup_client_median": 2.731,
+      "sanity": {
+        "selected_schedule_count": 127,
+        "eligible_student_count": 100,
+        "complete_student_count": 41,
+        "incomplete_students_count": 59,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          3,
+          97,
+          63,
+          94,
+          9,
+          30
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_100",
+      "case": "broad16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 64,
+        "valid": 64,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          3,
+          4,
+          13,
+          14,
+          15,
+          16,
+          25,
+          26,
+          27,
+          28,
+          37,
+          38,
+          39,
+          40,
+          49,
+          50,
+          51,
+          52,
+          61,
+          62,
+          63,
+          64,
+          73,
+          74,
+          75,
+          76,
+          85,
+          86,
+          87,
+          88
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "56e4d2d881ea8f8410173596ea01fb7a6946d3ecbd3678f1b3d37a6ccfc2aeb4",
+        "sha256_optimized": "56e4d2d881ea8f8410173596ea01fb7a6946d3ecbd3678f1b3d37a6ccfc2aeb4"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 84.088,
+          "median": 84.385,
+          "max": 84.972
+        },
+        "client_time_ms": {
+          "min": 63.241,
+          "median": 63.878,
+          "max": 64.062
+        },
+        "planning_time_ms": {
+          "min": 1.671,
+          "median": 1.703,
+          "max": 1.808
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 180626,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 21.978,
+          "median": 22.067,
+          "max": 23.332
+        },
+        "client_time_ms": {
+          "min": 20.056,
+          "median": 20.177,
+          "max": 22.251
+        },
+        "planning_time_ms": {
+          "min": 1.887,
+          "median": 1.914,
+          "max": 2.062
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 30016,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 3.824,
+      "speedup_client_median": 3.166,
+      "sanity": {
+        "selected_schedule_count": 253,
+        "eligible_student_count": 100,
+        "complete_student_count": 15,
+        "incomplete_students_count": 85,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          3,
+          54,
+          71,
+          15,
+          94,
+          23
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_1000",
+      "case": "week",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-09-13",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "5692e6757a6209a8b64260fa3c07e98196e0ba09082fb914dda457b680dda162",
+        "sha256_optimized": "5692e6757a6209a8b64260fa3c07e98196e0ba09082fb914dda457b680dda162"
+      },
+      "junk_correctness": {
+        "junk_ids": [
+          9,
+          999001
+        ],
+        "unlinked_materials_equals_junk": true,
+        "matched_unchanged": true,
+        "baseline_equals_optimized": true,
+        "tampered_graph_detected": true
+      },
+      "baseline": {
+        "exec_time_ms": {
+          "min": 9.402,
+          "median": 9.598,
+          "max": 10.205
+        },
+        "client_time_ms": {
+          "min": 10.944,
+          "median": 11.056,
+          "max": 14.468
+        },
+        "planning_time_ms": {
+          "min": 1.616,
+          "median": 1.696,
+          "max": 1.775
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 14986,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 6.722,
+          "median": 6.828,
+          "max": 9.383
+        },
+        "client_time_ms": {
+          "min": 7.971,
+          "median": 8.068,
+          "max": 17.667
+        },
+        "planning_time_ms": {
+          "min": 1.842,
+          "median": 1.903,
+          "max": 2.382
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 15221,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 1.406,
+      "speedup_client_median": 1.37,
+      "sanity": {
+        "selected_schedule_count": 80,
+        "eligible_student_count": 920,
+        "complete_student_count": 836,
+        "incomplete_students_count": 84,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          64,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_1000",
+      "case": "term16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "2953b01a8e124e6213ab333e3a19e95b616c961d3a35ccfce7a74e94c728cb81",
+        "sha256_optimized": "2953b01a8e124e6213ab333e3a19e95b616c961d3a35ccfce7a74e94c728cb81"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 417.857,
+          "median": 419.334,
+          "max": 420.713
+        },
+        "client_time_ms": {
+          "min": 302.917,
+          "median": 305.167,
+          "max": 316.061
+        },
+        "planning_time_ms": {
+          "min": 1.778,
+          "median": 1.86,
+          "max": 1.966
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 930530,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 2349,
+          "Temp Written Blocks": 783
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 61.056,
+          "median": 61.893,
+          "max": 65.058
+        },
+        "client_time_ms": {
+          "min": 47.462,
+          "median": 48.202,
+          "max": 49.94
+        },
+        "planning_time_ms": {
+          "min": 2.102,
+          "median": 2.187,
+          "max": 2.311
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 206397,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 6.775,
+      "speedup_client_median": 6.331,
+      "sanity": {
+        "selected_schedule_count": 1260,
+        "eligible_student_count": 1000,
+        "complete_student_count": 436,
+        "incomplete_students_count": 564,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201,
+          226
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_1000",
+      "case": "broad16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 64,
+        "valid": 64,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          3,
+          4,
+          13,
+          14,
+          15,
+          16,
+          25,
+          26,
+          27,
+          28,
+          37,
+          38,
+          39,
+          40,
+          49,
+          50,
+          51,
+          52,
+          61,
+          62,
+          63,
+          64,
+          73,
+          74,
+          75,
+          76,
+          85,
+          86,
+          87,
+          88
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "b64e26032c39026e2847b3535e98aad855b66c18f1402241f81141e139356619",
+        "sha256_optimized": "b64e26032c39026e2847b3535e98aad855b66c18f1402241f81141e139356619"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 838.912,
+          "median": 856.323,
+          "max": 903.265
+        },
+        "client_time_ms": {
+          "min": 613.78,
+          "median": 618.77,
+          "max": 657.564
+        },
+        "planning_time_ms": {
+          "min": 1.955,
+          "median": 2.127,
+          "max": 2.171
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 1859632,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 5351,
+          "Temp Written Blocks": 2234
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 122.433,
+          "median": 124.647,
+          "max": 127.994
+        },
+        "client_time_ms": {
+          "min": 92.485,
+          "median": 93.794,
+          "max": 94.798
+        },
+        "planning_time_ms": {
+          "min": 2.225,
+          "median": 2.421,
+          "max": 2.641
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 410437,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 325,
+          "Temp Written Blocks": 541
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 6.87,
+      "speedup_client_median": 6.597,
+      "sanity": {
+        "selected_schedule_count": 2521,
+        "eligible_student_count": 1000,
+        "complete_student_count": 186,
+        "incomplete_students_count": 814,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201,
+          226
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_10000",
+      "case": "week",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-09-13",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "9234d989852ce3953a251d5ced13313a32e1765097fecf691301e5c881069a81",
+        "sha256_optimized": "9234d989852ce3953a251d5ced13313a32e1765097fecf691301e5c881069a81"
+      },
+      "junk_correctness": {
+        "junk_ids": [
+          9,
+          999001
+        ],
+        "unlinked_materials_equals_junk": true,
+        "matched_unchanged": true,
+        "baseline_equals_optimized": true,
+        "tampered_graph_detected": true
+      },
+      "baseline": {
+        "exec_time_ms": {
+          "min": 89.012,
+          "median": 89.12,
+          "max": 94.626
+        },
+        "client_time_ms": {
+          "min": 84.281,
+          "median": 84.639,
+          "max": 84.748
+        },
+        "planning_time_ms": {
+          "min": 2.044,
+          "median": 2.225,
+          "max": 2.3
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 145804,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 1578,
+          "Temp Written Blocks": 526
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 58.101,
+          "median": 58.187,
+          "max": 61.103
+        },
+        "client_time_ms": {
+          "min": 48.938,
+          "median": 49.301,
+          "max": 55.13
+        },
+        "planning_time_ms": {
+          "min": 2.382,
+          "median": 2.458,
+          "max": 2.682
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 146371,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 1,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 1.532,
+      "speedup_client_median": 1.717,
+      "sanity": {
+        "selected_schedule_count": 788,
+        "eligible_student_count": 9200,
+        "complete_student_count": 8292,
+        "incomplete_students_count": 908,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          64,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_10000",
+      "case": "term16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 32,
+        "valid": 32,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          13,
+          14,
+          25,
+          26,
+          37,
+          38,
+          49,
+          50,
+          61,
+          62,
+          73,
+          74,
+          85,
+          86
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "7b55538f079723e45951809e2e680cce8c1c165ae6a1b1492051d5d30e592aaa",
+        "sha256_optimized": "7b55538f079723e45951809e2e680cce8c1c165ae6a1b1492051d5d30e592aaa"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 4291.012,
+          "median": 4392.199,
+          "max": 4670.632
+        },
+        "client_time_ms": {
+          "min": 3053.094,
+          "median": 3102.089,
+          "max": 3158.639
+        },
+        "planning_time_ms": {
+          "min": 2.57,
+          "median": 2.741,
+          "max": 2.839
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 9920765,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 27135,
+          "Temp Written Blocks": 11300
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 596.755,
+          "median": 597.677,
+          "max": 614.343
+        },
+        "client_time_ms": {
+          "min": 435.445,
+          "median": 437.676,
+          "max": 455.067
+        },
+        "planning_time_ms": {
+          "min": 2.868,
+          "median": 2.949,
+          "max": 2.962
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 2004080,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 2896,
+          "Temp Written Blocks": 3982
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 7.349,
+      "speedup_client_median": 7.088,
+      "sanity": {
+        "selected_schedule_count": 12610,
+        "eligible_student_count": 10000,
+        "complete_student_count": 4054,
+        "incomplete_students_count": 5946,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201,
+          226
+        ]
+      }
+    },
+    {
+      "dataset": "lab1_benchmark_e6208012_10000",
+      "case": "broad16",
+      "params": {
+        "date_from": "2026-09-07",
+        "date_to": "2026-12-27",
+        "limit": 10,
+        "include_trace": false,
+        "match_mode": "literal",
+        "missing_policy": "exclude",
+        "department_id": null,
+        "group_id": null
+      },
+      "materials": {
+        "total": 64,
+        "valid": 64,
+        "unlinked_junk_in_timed_run": 0,
+        "matched_lecture_ids": [
+          1,
+          2,
+          3,
+          4,
+          13,
+          14,
+          15,
+          16,
+          25,
+          26,
+          27,
+          28,
+          37,
+          38,
+          39,
+          40,
+          49,
+          50,
+          51,
+          52,
+          61,
+          62,
+          63,
+          64,
+          73,
+          74,
+          75,
+          76,
+          85,
+          86,
+          87,
+          88
+        ]
+      },
+      "equality": {
+        "include_trace_false": true,
+        "include_trace_true": true,
+        "results_stable_across_trace_flag": true,
+        "sha256_baseline": "dbef23d24c4570ff2d97332e054e822be649241a1b59896ddf62c8070935771c",
+        "sha256_optimized": "dbef23d24c4570ff2d97332e054e822be649241a1b59896ddf62c8070935771c"
+      },
+      "junk_correctness": null,
+      "baseline": {
+        "exec_time_ms": {
+          "min": 8894.706,
+          "median": 9162.441,
+          "max": 9254.318
+        },
+        "client_time_ms": {
+          "min": 6220.659,
+          "median": 6366.707,
+          "max": 6566.431
+        },
+        "planning_time_ms": {
+          "min": 2.729,
+          "median": 2.892,
+          "max": 2.996
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 19820936,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 61288,
+          "Temp Written Blocks": 29749
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "optimized": {
+        "exec_time_ms": {
+          "min": 1200.426,
+          "median": 1214.466,
+          "max": 1292.591
+        },
+        "client_time_ms": {
+          "min": 865.402,
+          "median": 869.038,
+          "max": 926.425
+        },
+        "planning_time_ms": {
+          "min": 3.01,
+          "median": 3.405,
+          "max": 3.621
+        },
+        "buffers_root_median": {
+          "Shared Hit Blocks": 3988429,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 15524,
+          "Temp Written Blocks": 12405
+        },
+        "attendance_planned_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_executed_partitions": [
+          "attendance_w2026_09_07",
+          "attendance_w2026_09_14",
+          "attendance_w2026_09_21",
+          "attendance_w2026_09_28",
+          "attendance_w2026_10_05",
+          "attendance_w2026_10_12",
+          "attendance_w2026_10_19",
+          "attendance_w2026_10_26",
+          "attendance_w2026_11_02",
+          "attendance_w2026_11_09",
+          "attendance_w2026_11_16",
+          "attendance_w2026_11_23",
+          "attendance_w2026_11_30",
+          "attendance_w2026_12_07",
+          "attendance_w2026_12_14",
+          "attendance_w2026_12_21"
+        ],
+        "attendance_planned_count": 16,
+        "attendance_executed_count": 16,
+        "attendance_subplans_removed": 0
+      },
+      "speedup_exec_median": 7.544,
+      "speedup_client_median": 7.326,
+      "sanity": {
+        "selected_schedule_count": 25218,
+        "eligible_student_count": 10000,
+        "complete_student_count": 1871,
+        "incomplete_students_count": 8129,
+        "ranking_complete": false,
+        "top_student_ids": [
+          1,
+          26,
+          51,
+          76,
+          101,
+          126,
+          151,
+          176,
+          201,
+          226
+        ]
+      }
+    }
+  ],
+  "fixture_correctness": {
+    "include_trace_false": {
+      "baseline": {
+        "matched_lecture_ids": [
+          1
+        ],
+        "unlinked_materials": [],
+        "selected_schedule_count": 2,
+        "eligible_student_count": 13,
+        "complete_student_count": 12,
+        "top_student_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "top_percentages": [
+          0.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0
+        ],
+        "incomplete_students": [
+          {
+            "student_id": 13,
+            "present_count": 1,
+            "unknown_count": 1,
+            "expected_count": 2,
+            "maximum_percentage": 100.0,
+            "minimum_percentage": 50.0
+          }
+        ],
+        "graph_consistent": true
+      },
+      "optimized": {
+        "matched_lecture_ids": [
+          1
+        ],
+        "unlinked_materials": [],
+        "selected_schedule_count": 2,
+        "eligible_student_count": 13,
+        "complete_student_count": 12,
+        "top_student_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "top_percentages": [
+          0.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0
+        ],
+        "incomplete_students": [
+          {
+            "student_id": 13,
+            "present_count": 1,
+            "unknown_count": 1,
+            "expected_count": 2,
+            "maximum_percentage": 100.0,
+            "minimum_percentage": 50.0
+          }
+        ],
+        "graph_consistent": true
+      },
+      "baseline_equals_optimized": true
+    },
+    "include_trace_true": {
+      "baseline": {
+        "matched_lecture_ids": [
+          1
+        ],
+        "unlinked_materials": [],
+        "selected_schedule_count": 2,
+        "eligible_student_count": 13,
+        "complete_student_count": 12,
+        "top_student_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "top_percentages": [
+          0.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0
+        ],
+        "incomplete_students": [
+          {
+            "student_id": 13,
+            "present_count": 1,
+            "unknown_count": 1,
+            "expected_count": 2,
+            "maximum_percentage": 100.0,
+            "minimum_percentage": 50.0
+          }
+        ],
+        "graph_consistent": true
+      },
+      "optimized": {
+        "matched_lecture_ids": [
+          1
+        ],
+        "unlinked_materials": [],
+        "selected_schedule_count": 2,
+        "eligible_student_count": 13,
+        "complete_student_count": 12,
+        "top_student_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "top_percentages": [
+          0.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0,
+          50.0
+        ],
+        "incomplete_students": [
+          {
+            "student_id": 13,
+            "present_count": 1,
+            "unknown_count": 1,
+            "expected_count": 2,
+            "maximum_percentage": 100.0,
+            "minimum_percentage": 50.0
+          }
+        ],
+        "graph_consistent": true
+      },
+      "baseline_equals_optimized": true
+    },
+    "expected": {
+      "matched_lecture_ids": [
+        1
+      ],
+      "unlinked_materials": [],
+      "eligible_student_count": 13,
+      "complete_student_count": 12,
+      "top_student_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "top_percentages": [
+        0.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0,
+        50.0
+      ],
+      "student13": {
+        "student_id": 13,
+        "expected_count": 2,
+        "present_count": 1,
+        "unknown_count": 1
+      },
+      "selected_schedule_count": 2
+    },
+    "checks": {
+      "matched_lecture_ids": true,
+      "unlinked_materials": true,
+      "selected_schedule_count_2": true,
+      "eligible_13": true,
+      "complete_12": true,
+      "top_ids_1_10": true,
+      "percentages_0_then_50": true,
+      "student13_unknown_1_of_2": true,
+      "junk_unlinked_999": true,
+      "empty_graph_missing_detected": true,
+      "extra_graph_schedule_detected": true,
+      "missing_graph_member_detected": true
+    },
+    "all_passed": true
+  }
+}

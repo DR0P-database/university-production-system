@@ -1,0 +1,179 @@
+{
+  "term": "целостность",
+  "period": {
+    "from": "2026-09-07",
+    "to": "2026-12-27"
+  },
+  "results": [
+    {
+      "student": {
+        "id": 26,
+        "group_id": 1,
+        "record_book": "26Д0026",
+        "last_name": "Гусев",
+        "first_name": "Ксения",
+        "patronymic": "Петровна",
+        "email": "stud0026@demo.example",
+        "phone": "+7 900 126 36 36",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 2
+    },
+    {
+      "student": {
+        "id": 47,
+        "group_id": 2,
+        "record_book": "26Д0047",
+        "last_name": "Абрамов",
+        "first_name": "Захар",
+        "patronymic": "Николаевна",
+        "email": "stud0047@demo.example",
+        "phone": "+7 900 147 57 57",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 2
+    },
+    {
+      "student": {
+        "id": 48,
+        "group_id": 2,
+        "record_book": "26Д0048",
+        "last_name": "Шестаков",
+        "first_name": "Вера",
+        "patronymic": "Алексеевна",
+        "email": "stud0048@demo.example",
+        "phone": "+7 900 148 58 58",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 2
+    },
+    {
+      "student": {
+        "id": 53,
+        "group_id": 3,
+        "record_book": "26Д0053",
+        "last_name": "Уваров",
+        "first_name": "Полина",
+        "patronymic": "Геннадьевич",
+        "email": "stud0053@demo.example",
+        "phone": "+7 900 153 63 63",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 2
+    },
+    {
+      "student": {
+        "id": 75,
+        "group_id": 3,
+        "record_book": "26Д0075",
+        "last_name": "Никитин",
+        "first_name": "Валентина",
+        "patronymic": null,
+        "email": "stud0075@demo.example",
+        "phone": "+7 900 175 85 25",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 2
+    },
+    {
+      "student": {
+        "id": 79,
+        "group_id": 4,
+        "record_book": "26Д0079",
+        "last_name": "Зайцев",
+        "first_name": "Борис",
+        "patronymic": "Константинович",
+        "email": "stud0079@demo.example",
+        "phone": "+7 900 179 89 29",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 1
+    },
+    {
+      "student": {
+        "id": 80,
+        "group_id": 4,
+        "record_book": "26Д0080",
+        "last_name": "Уваров",
+        "first_name": "Олег",
+        "patronymic": "Константинович",
+        "email": "stud0080@demo.example",
+        "phone": "+7 900 180 10 30",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 1
+    },
+    {
+      "student": {
+        "id": 90,
+        "group_id": 4,
+        "record_book": "26Д0090",
+        "last_name": "Лебедев",
+        "first_name": "Яна",
+        "patronymic": "Борисович",
+        "email": "stud0090@demo.example",
+        "phone": "+7 900 190 20 40",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 1
+    },
+    {
+      "student": {
+        "id": 102,
+        "group_id": 4,
+        "record_book": "26Д0102",
+        "last_name": "Хохлов",
+        "first_name": "Вера",
+        "patronymic": "Евгеньевич",
+        "email": "stud0102@demo.example",
+        "phone": "+7 900 202 32 52",
+        "enrollment_date": "2023-09-01",
+        "status": "academic_leave"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 1
+    },
+    {
+      "student": {
+        "id": 104,
+        "group_id": 4,
+        "record_book": "26Д0104",
+        "last_name": "Гаврилов",
+        "first_name": "Максим",
+        "patronymic": "Викторович",
+        "email": "stud0104@demo.example",
+        "phone": "+7 900 204 34 54",
+        "enrollment_date": "2023-09-01",
+        "status": "active"
+      },
+      "attendance_percentage": 0.0,
+      "present_count": 0,
+      "expected_count": 1
+    }
+  ]
+}
